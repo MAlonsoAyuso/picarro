@@ -17,7 +17,3 @@ def parse(path):
 def _parse_timestamp(d):
     timestamp_str = d["DATE"] + " " + d["TIME"]
     return timestamp_str.apply(datetime.datetime.strptime, args=(_TIMESTAMP_FORMAT,))
-
-
-class Columns:
-    SPECIES = "species"
