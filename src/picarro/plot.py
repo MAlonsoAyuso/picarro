@@ -28,14 +28,16 @@ def plot_measurement(data, columns=_CONC_COLUMNS):
         sharex=True,
         gridspec_kw=dict(
             hspace=0.4,
+            bottom=0.12,
         ),
         figsize=(6.4, 2 + len(columns)),
     )
-    elapsed_minutes = (data.index - data.index[0]).seconds / _SECONDS_PER_MINUTE
+    t0 = data.index[0]
+    elapsed_minutes = (data.index - t0).seconds / _SECONDS_PER_MINUTE
     for col, ax in zip(columns, axs):
         ax.plot(elapsed_minutes, data[col])
         ax.set_title(_subplot_title(col))
 
-    axs[-1].set_xlabel("Time elapsed (minutes)")
+    axs[-1].set_xlabel(f"Time elapsed (minutes) since\n{t0}")
 
     return fig
