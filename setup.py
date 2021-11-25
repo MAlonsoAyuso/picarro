@@ -13,12 +13,13 @@ setup(
     description="A package to analyze data from a Picarro G2308. YMMV.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    package_dir={'': 'src'},
+    package_dir={"": "src"},
     packages=find_packages(where="src"),
     python_requires=">=3.6, <4",
     install_requires=[
         "pandas >= 1.3",
         "matplotlib >= 3.5",
+        "scipy >= 1.7",
     ],
     extras_require={
         "dev": [
