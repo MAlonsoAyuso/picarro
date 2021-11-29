@@ -1,3 +1,4 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+# setuptools v46.4.0 supports the `version = attr: examplepackage.__version__`
+requires = ["setuptools >= 46.4.0", "wheel"]
 build-backend = "setuptools.build_meta"

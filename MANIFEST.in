@@ -1,0 +1,4 @@
+include CHANGES.md
+include tox.ini
+include requirements/*.txt
+global-exclude *.pyc

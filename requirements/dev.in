@@ -1,0 +1,5 @@
+-r tests.in
+pip-tools
+tox
+build
+twine
