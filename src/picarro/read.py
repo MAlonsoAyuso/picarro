@@ -1,5 +1,5 @@
 from os import PathLike
-from typing import Iterator, NewType, cast
+from typing import Iterable, Iterator, NewType, cast
 import pandas as pd
 
 
@@ -49,6 +49,7 @@ CONC_UNITS = {
     PicarroColumns.N2O: "ppmv",
 }
 
+DEFAULT_MAX_GAP_BETWEEN_CHUNKS = pd.Timedelta(5, "s")
 
 # DataFile: A DataFrame from a whole .dat file (after some basic parsing)
 # Chunk: A DataFrame with a contiguous subset of a DataFile,
@@ -62,8 +63,8 @@ Measurement = NewType("Measurement", pd.DataFrame)
 # ChunkMeta: A DataFrame naming start and end times for a chunk, and the active solenoid
 ChunkMeta = NewType("ChunkMeta", pd.DataFrame)
 
-# Mapping Picarro data file paths to chunk metadata
-ChunkMap = dict[PathLike, ChunkMeta]
+# A combination of information from ChunkMetas and Picarro data file paths
+ChunkMap = NewType("ChunkMap", pd.DataFrame)
 
 
 class ChunkMetaColumns:
@@ -140,3 +141,55 @@ def read_chunks_metadata(path: PathLike) -> ChunkMeta:
         },
     )
     return cast(ChunkMeta, result)
+
+
+def build_chunk_map(paths: Iterable[PathLike]) -> ChunkMap:
+    chunk_map = (
+        pd.concat(
+            {path: get_chunks_metadata(read_raw(path)) for path in paths},
+            names=["path", "chunk_index"],
+        )
+        .reset_index()
+        .sort_values(ChunkMetaColumns.start)
+    )
+
+    return cast(ChunkMap, chunk_map)
+
+
+def _check_no_overlaps(measurement_map):
+    overlapping = measurement_map["time_gap_from_previous"] < pd.Timedelta(0)  # type: ignore
+    if overlapping.any():
+        violator_index = overlapping[overlapping].index[0]
+        violators = measurement_map.loc[violator_index - 1 : violator_index]
+        raise ValueError(f"overlapping chunks: {violators}")
+
+
+def iter_measurements(
+    chunk_map: ChunkMap, max_gap: pd.Timedelta = DEFAULT_MAX_GAP_BETWEEN_CHUNKS
+) -> Iterator[Measurement]:
+    measurement_map = chunk_map.assign(
+        time_gap_from_previous=lambda d: (
+            d[ChunkMetaColumns.start] - d[ChunkMetaColumns.end].shift(1)
+        ),
+        is_adjacent_to_previous=lambda d: (d["time_gap_from_previous"] < max_gap),
+        same_valve_as_previous=lambda d: (
+            d[ChunkMetaColumns.solenoid_valve].diff() == 0
+        ),
+        chunk_starts_new_measurement=lambda d: (
+            ~(d["same_valve_as_previous"] & d["is_adjacent_to_previous"])
+        ).fillna(
+            True
+        ),  # fillna(True) needed for the first row
+        measurement_number=lambda d: d["chunk_starts_new_measurement"].cumsum(),
+    )
+    _check_no_overlaps(measurement_map)
+
+    def read_chunk(path, chunk_index):
+        chunks = list(iter_chunks(read_raw(path)))
+        return chunks[chunk_index]
+
+    for _, g in measurement_map.groupby("measurement_number"):
+        measurement = pd.concat(
+            [read_chunk(row["path"], row["chunk_index"]) for _, row in g.iterrows()]
+        )
+        yield cast(Measurement, measurement)
