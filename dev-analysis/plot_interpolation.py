@@ -1,7 +1,7 @@
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-import picarro
+from picarro.read import read_raw
 from example_data import data_path
 
 
@@ -11,7 +11,7 @@ TRANSPARENT = "#00000000"
 
 
 def plot_interpolation(species_num, species_col, ax):
-    d = picarro.read_raw(data_path("example.dat")).iloc[I_START : I_START + N_POINTS]
+    d = read_raw(data_path("example.dat")).iloc[I_START : I_START + N_POINTS]
 
     is_species_measured = d["species"] == species_num
     linear_interpolation_values = (
