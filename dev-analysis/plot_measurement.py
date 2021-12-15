@@ -1,13 +1,22 @@
-from picarro.read import read_raw, iter_chunks
+from picarro.read import PicarroColumns, read_raw
 from picarro.plot import plot_measurement
+from picarro.analyze import fit_line
 from example_data import data_path
 
-data = read_raw(data_path("example.dat"))
-measurements = list(iter_chunks(data))
-measurement = measurements[1]
+measurement = read_raw(data_path("example_measurement.dat"))
+
+columns = (
+    PicarroColumns.CH4,
+    PicarroColumns.CO2,
+    PicarroColumns.N2O,
+)
 fig = plot_measurement(
     measurement,
-    fit_line_kws=dict(skip_start=60 * 10, skip_end=60 * 2.5),
+    columns,
+    linear_fits={
+        col: fit_line(measurement[col], skip_start=10 * 60, skip_end=2.5 * 60)
+        for col in columns
+    },
 )
 
 fig.savefig("outdata/example_data_measurement_1.png")

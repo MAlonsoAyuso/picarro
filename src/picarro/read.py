@@ -43,6 +43,13 @@ class PicarroColumns:
     nh3_conc_ave = "nh3_conc_ave"
 
 
+CONC_UNITS = {
+    PicarroColumns.CH4: "ppmv",
+    PicarroColumns.CO2: "ppmv",
+    PicarroColumns.N2O: "ppmv",
+}
+
+
 class ChunkMetaColumns:
     start = "start"
     end = "end"

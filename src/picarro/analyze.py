@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import datetime
-from os import times
 import pandas as pd
+import numpy as np
 import scipy.stats
 
 
@@ -9,21 +9,23 @@ import scipy.stats
 class LinearFit:
     start_time: datetime.datetime
     end_time: datetime.datetime
-    intercept: float
-    slope: float
-    intercept_stderr: float
-    slope_stderr: float
+    intercept: np.float64
+    slope: np.float64
+    intercept_stderr: np.float64
+    slope_stderr: np.float64
+
+    def predict(self, times):
+        elapsed_time_as_num = time_to_num(times, self.start_time)
+        values = self.intercept + self.slope * elapsed_time_as_num
+        return pd.Series(data=values, index=times)
+
+    def predict_endpoints(self):
+        times = pd.DatetimeIndex([self.start_time, self.end_time])
+        return self.predict(times)
 
 
 def time_to_num(time, start_time):
     return (time - start_time).seconds
-
-
-def predict_two_points(linear_fit):
-    times = pd.DatetimeIndex([linear_fit.start_time, linear_fit.end_time])
-    elapsed_time_as_num = time_to_num(times, linear_fit.start_time)
-    values = linear_fit.intercept + linear_fit.slope * elapsed_time_as_num
-    return pd.Series(data=values, index=times)
 
 
 def fit_line(data, skip_start=0, skip_end=0):
