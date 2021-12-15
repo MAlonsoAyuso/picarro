@@ -3,17 +3,21 @@ import importlib.resources as resources
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pandas as pd
-
+from picarro.read import PicarroColumns
 from picarro.analyze import fit_line, predict_two_points
 
 with resources.path("picarro.resources", "matplotlib-style") as path:
     mpl.style.use(path)
 
-_CONC_COLUMNS = ("CH4", "CO2", "N2O")
+_CONC_COLUMNS = (
+    PicarroColumns.CH4,
+    PicarroColumns.CO2,
+    PicarroColumns.N2O,
+)
 _CONC_UNITS = {
-    "CH4": "ppmv",
-    "CO2": "ppmv",
-    "N2O": "ppmv",
+    PicarroColumns.CH4: "ppmv",
+    PicarroColumns.CO2: "ppmv",
+    PicarroColumns.N2O: "ppmv",
 }
 _SECONDS_PER_MINUTE = 60
 
