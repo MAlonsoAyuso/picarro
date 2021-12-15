@@ -1,18 +1,6 @@
-# Version 0.1.1dev
+# 0.1.0dev (unreleased)
 
-Unreleased
-
-# Version 0.1.1
-
-Released 2021-11-28
-
-- Use `.editorconfig`
-
-# Version 0.1.0
-
-Released 2021-11-28
-
-- Basic metadata
-- Testing using `pytest` and `tox`
-- CLI using `click`
-- Manual build & release
+- Use package structure from <https://github.com/rasmuse/python-package>
+- Features:
+  - Read Picarro data files
+  - Fit regression lines
