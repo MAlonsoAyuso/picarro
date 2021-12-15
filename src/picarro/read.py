@@ -1,5 +1,5 @@
-import datetime
 from os import PathLike
+from typing import Iterator, NewType, cast
 import pandas as pd
 
 
@@ -50,15 +50,31 @@ CONC_UNITS = {
 }
 
 
+# DataFile: A DataFrame from a whole .dat file (after some basic parsing)
+# Chunk: A DataFrame with a contiguous subset of a DataFile,
+#   with exactly one solenoid valve value.
+# Measurement: A DataFrame possibly constructed from one or more chunks,
+#   hopefully corresponding to a whole measurement from start to end.
+DataFile = NewType("DataFile", pd.DataFrame)
+Chunk = NewType("Chunk", pd.DataFrame)
+Measurement = NewType("Measurement", pd.DataFrame)
+
+# ChunkMeta: A DataFrame naming start and end times for a chunk, and the active solenoid
+ChunkMeta = NewType("ChunkMeta", pd.DataFrame)
+
+# Mapping Picarro data file paths to chunk metadata
+ChunkMap = dict[PathLike, ChunkMeta]
+
+
 class ChunkMetaColumns:
     start = "start"
     end = "end"
     solenoid_valve = "solenoid_valve"
 
 
-def read_raw(path):
+def read_raw(path: PathLike) -> DataFile:
     d = pd.read_csv(path, sep=r"\s+").pipe(_reindex_timestamp)
-    return d
+    return cast(DataFile, d)
 
 
 def _reindex_timestamp(d):
@@ -78,11 +94,11 @@ def _reindex_timestamp(d):
     return d.set_index(timestamp)
 
 
-def iter_chunks(d):
+def iter_chunks(d: DataFile) -> Iterator[Chunk]:
     d = d.pipe(_drop_data_between_valves)
     valve_just_changed = d[PicarroColumns.solenoid_valves].diff() != 0
     valve_change_count = valve_just_changed.cumsum()
-    for i, g in d.groupby(valve_change_count):
+    for i, g in d.groupby(valve_change_count):  # type: ignore
         yield g
 
 
@@ -95,7 +111,7 @@ def _drop_data_between_valves(data):
     return data[~is_between_valves].astype({PicarroColumns.solenoid_valves: int})
 
 
-def _get_chunk_metadata(chunk):
+def _get_chunk_metadata(chunk: Chunk):
     solenoid_valves = chunk[PicarroColumns.solenoid_valves].unique()
     assert len(solenoid_valves) == 1, solenoid_valves
     (the_valve,) = solenoid_valves
@@ -106,19 +122,21 @@ def _get_chunk_metadata(chunk):
     }
 
 
-def get_chunks_metadata(d):
-    return pd.DataFrame(list(map(_get_chunk_metadata, iter_chunks(d))))
+def get_chunks_metadata(d: DataFile) -> ChunkMeta:
+    result = pd.DataFrame(list(map(_get_chunk_metadata, iter_chunks(d))))
+    return cast(ChunkMeta, result)
 
 
 def write_chunks_metadata(chunks_metadata, path: PathLike):
     chunks_metadata.to_csv(path, index=False)
 
 
-def read_chunks_metadata(path: PathLike):
-    return pd.read_csv(
+def read_chunks_metadata(path: PathLike) -> ChunkMeta:
+    result = pd.read_csv(
         path,
         parse_dates=[ChunkMetaColumns.start, ChunkMetaColumns.end],
         dtype={
             ChunkMetaColumns.solenoid_valve: int,
         },
     )
+    return cast(ChunkMeta, result)
