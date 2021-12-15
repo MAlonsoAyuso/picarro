@@ -25,7 +25,7 @@ class LinearFit:
 
 
 def time_to_num(time, start_time):
-    return (time - start_time).seconds
+    return (time - start_time).total_seconds()
 
 
 def fit_line(data, skip_start=0, skip_end=0):
