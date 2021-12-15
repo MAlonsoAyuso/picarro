@@ -1,22 +1,18 @@
 import datetime
 import pandas as pd
 
-_TIMESTAMP_FORMAT = r"%Y-%m-%d %H:%M:%S.%f"
+EPOCH_TIME_COL = "EPOCH_TIME"
+EPOCH_UNIT = "s"
 
 
 def read_raw(path):
     d = pd.read_csv(path, sep=r"\s+")
-    timestamps = _parse_timestamp(d)
+    timestamps = d[EPOCH_TIME_COL].pipe(pd.to_datetime, unit=EPOCH_UNIT)
     if not timestamps.is_unique:
-        first_duplicate = timestamps[timestamps.duplicated()].iloc[0]
+        first_duplicate = timestamps.loc[timestamps.duplicated()].iloc[0]
         raise ValueError(f"non-unique timestamp {first_duplicate}")
-    d.index = timestamps
+    d = d.set_index(timestamps)
     return d
-
-
-def _parse_timestamp(d):
-    timestamp_str = d["DATE"] + " " + d["TIME"]
-    return timestamp_str.apply(datetime.datetime.strptime, args=(_TIMESTAMP_FORMAT,))
 
 
 def _drop_data_between_valves(data):

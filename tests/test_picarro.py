@@ -13,11 +13,6 @@ def test_read_raw():
     picarro.read_raw(data_path("example.dat"))
 
 
-def test_require_well_formatted_timestamps():
-    with pytest.raises(ValueError):
-        picarro.read_raw(data_path("misformatted_timestamp.dat"))
-
-
 def test_require_unique_timestamps():
     with pytest.raises(ValueError):
         picarro.read_raw(data_path("duplicate_timestamp.dat"))
