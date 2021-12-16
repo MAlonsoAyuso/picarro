@@ -184,8 +184,18 @@ def iter_measurements(
     )
     _check_no_overlaps(measurement_map)
 
+    read_cache = {
+        "path": None,
+        "chunks": [],
+    }
     def read_chunk(path, chunk_index):
-        chunks = list(iter_chunks(read_raw(path)))
+        if path == read_cache["path"]:
+            chunks = read_cache["chunks"]
+        else:
+            chunks = list(iter_chunks(read_raw(path)))
+            read_cache["path"] = path
+            read_cache["chunks"] = chunks
+
         return chunks[chunk_index]
 
     for _, g in measurement_map.groupby("measurement_number"):
