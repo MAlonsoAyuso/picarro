@@ -1,7 +1,12 @@
+from unittest.case import skip
 import pandas as pd
 import pytest
 from picarro.read import read_raw, PicarroColumns
-from picarro.analyze import fit_line, estimate_vol_flux
+from picarro.analyze import (
+    estimate_vol_flux_exponential,
+    fit_line,
+    estimate_vol_flux,
+)
 import pathlib
 import numpy as np
 
@@ -56,18 +61,60 @@ def test_fit_line_approximates_values():
 def test_estimate_N2O_vol_flux_right_order_of_magnitude():
     t0 = 8 * 60  # s
     skip_extra = 2 * 60  # s
+    skip_start = t0 + skip_extra
     measurement = read_raw(data_path("example_measurement.dat"))[PicarroColumns.N2O]
-    A = 0.36  # m2
+    A = 0.25  # m2
     V = 50e-3  # m3
     Q = 0.25 * 1e-3 / 60  # m3/s
     h = V / A  # m
     tau = V / Q  # s
+    t0 = 8 * 60
+    ppm = 1e-6
     vol_flux = estimate_vol_flux(
         measurement,
-        t0=8 * 60,
-        skip_start=10 * 60,
-        h=V / A,  # m
-        tau=V / Q,  # s
-        conc_unit_prefix=1e-6,
+        t0=t0,
+        skip_start=skip_start,
+        h=h,  # m
+        tau=tau,  # s
+        conc_unit_prefix=ppm,
     )
-    assert abs_rel_diff(vol_flux, 2e-11) < 0.1  # m/s
+
+    slope = 1.44022e-4  # ppmv / s
+    total_measurement_time = (
+        measurement.index[-1] - measurement.index[0]
+    ).total_seconds()
+    elapsed_time_at_mid_of_fit = (
+        skip_start - t0 + (total_measurement_time - skip_start) / 2
+    )
+    correction_factor = np.exp(elapsed_time_at_mid_of_fit / tau)
+    expected_result = h * slope * correction_factor * ppm
+    assert abs_rel_diff(vol_flux, expected_result) < 0.001  # m/s
+
+
+def test_estimate_N2O_vol_flux_linear_and_exponential_agree():
+    t0 = 8 * 60  # s
+    skip_extra = 2 * 60  # s
+    measurement = read_raw(data_path("example_measurement.dat"))[PicarroColumns.N2O]
+    A = 0.25  # m2
+    V = 50e-3  # m3
+    Q = 0.25 * 1e-3 / 60  # m3/s
+    h = V / A  # m
+    tau = V / Q  # s
+    ppm = 1e-6
+    vol_flux_linear = estimate_vol_flux(
+        measurement,
+        t0=t0,
+        skip_start=t0 + skip_extra,
+        h=h,  # m
+        tau=tau,  # s
+        conc_unit_prefix=ppm,
+    )
+    vol_flux_exponential = estimate_vol_flux_exponential(
+        measurement,
+        t0=t0,
+        skip_start=t0 + skip_extra,
+        h=h,  # m
+        tau=tau,  # s
+        conc_unit_prefix=ppm,
+    )
+    assert abs_rel_diff(vol_flux_linear, vol_flux_exponential) < 0.001  # m/s

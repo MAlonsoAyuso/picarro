@@ -3,6 +3,7 @@ import importlib.resources as resources
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pandas as pd
+from picarro.analyze import ExponentialFit
 from picarro.read import CONC_UNITS
 
 with resources.path("picarro.resources", "matplotlib-style") as path:
@@ -19,9 +20,12 @@ def _subplot_title(column):
     return column
 
 
-def plot_measurement(data, columns, linear_fits=None):
+def plot_measurement(data, columns, linear_fits=None, exponential_fits=None):
     if linear_fits is None:
         linear_fits = {}
+
+    if exponential_fits is None:
+        exponential_fits = {}
 
     fig, axs = plt.subplots(
         nrows=len(columns),
@@ -33,10 +37,10 @@ def plot_measurement(data, columns, linear_fits=None):
         figsize=(6.4, 2 + len(columns)),
     )
 
-    t0 = data.index[0]
+    measurement_start = data.index[0]
 
     def calculate_elapsed(time):
-        return (time - t0).seconds / _SECONDS_PER_MINUTE
+        return (time - measurement_start).seconds / _SECONDS_PER_MINUTE
 
     for col, ax in zip(columns, axs):
         ax.plot(calculate_elapsed(data.index), data[col])
@@ -50,6 +54,20 @@ def plot_measurement(data, columns, linear_fits=None):
                 lw=2,
             )
 
-    axs[-1].set_xlabel(f"Time elapsed (minutes) since\n{t0}")
+        if col in exponential_fits:
+            exponential_fit: ExponentialFit = exponential_fits[col]
+            times = pd.date_range(
+                start=exponential_fit.start_time,
+                end=exponential_fit.end_time,
+                freq="1s",
+            )
+            curve = exponential_fit.predict(times)
+            ax.plot(
+                calculate_elapsed(curve.index),
+                curve,
+                lw=2,
+            )
+
+    axs[-1].set_xlabel(f"Time elapsed (minutes) since\n{measurement_start}")
 
     return fig
