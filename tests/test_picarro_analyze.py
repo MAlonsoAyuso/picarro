@@ -11,14 +11,14 @@ def data_path(relpath):
     return _DATA_DIR / relpath
 
 
-def same_order_of_magnitude(value, reference_value):
-    return np.round(value / reference_value) == 1
+def abs_rel_diff(a, b):
+    return np.abs((a - b) / b)
 
 
 def test_N2O_slope_right_order_of_magnitude():
     measurement = read_raw(data_path("example_measurement.dat"))[PicarroColumns.N2O]
     linear_fit = fit_line(measurement, skip_start=60 * 10)
-    assert same_order_of_magnitude(linear_fit.slope, 1e-4)  # 10^(-4) ppmv / s
+    assert abs_rel_diff(linear_fit.slope, 1.44e-4) < 0.01  # 1.44 * 10^(-4) ppmv / s
 
 
 def test_fit_line_approximates_values():
