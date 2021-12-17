@@ -49,3 +49,10 @@ def fit_line(data, skip_start=0, skip_end=0):
         intercept_stderr=result.intercept_stderr,
         slope_stderr=result.stderr,
     )
+
+def estimate_vol_flux(measurement, t0, skip_start, h, tau, conc_unit_prefix):
+    linear_fit = fit_line(measurement, skip_start, skip_end=0)
+    fit_duration = (linear_fit.end_time - linear_fit.start_time).total_seconds()
+    t_mid = skip_start + fit_duration / 2
+    vol_flux = h * np.exp(t_mid / tau) * linear_fit.slope * conc_unit_prefix
+    return vol_flux
