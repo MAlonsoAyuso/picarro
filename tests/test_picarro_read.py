@@ -1,17 +1,17 @@
+import itertools
 import pytest
-import pandas as pd
-from pandas.testing import assert_frame_equal
 from picarro.read import (
+    get_chunks_metadata,
+    iter_measurements_meta,
     read_raw,
     iter_chunks,
-    get_chunks_metadata,
-    read_chunks_metadata,
-    write_chunks_metadata,
+    load_chunks_meta,
+    save_chunks_meta,
     PicarroColumns,
-    build_chunk_map,
     iter_measurements,
 )
 import pathlib
+import pandas as pd
 
 _DATA_DIR = pathlib.Path(__file__).parent.parent / "example_data"
 
@@ -38,27 +38,30 @@ def test_chunks_have_unique_int_solenoid_valves():
 
 
 def test_chunk_metadata_is_correct():
-    # example_chunks.csv is verified to be the desired outcome
-    expected_chunks = read_chunks_metadata(data_path("example_chunks.csv"))
-    d = read_raw(data_path("example.dat"))
-    assert_frame_equal(get_chunks_metadata(d), expected_chunks)
+    # example_chunks.json is verified to be the desired outcome
+    path = data_path("example.dat")
+    expected_chunks = load_chunks_meta(data_path("example_chunks.json"))
+    data = read_raw(path)
+    chunks = get_chunks_metadata(data, "example.dat")
+    assert expected_chunks == chunks
 
 
 def test_chunk_metadata_round_trip_file(tmp_path: pathlib.Path):
-    file_path = tmp_path / "chunks.csv"
+    file_path = tmp_path / "chunks.json"
     d = read_raw(data_path("example.dat"))
-    chunks_metadata = get_chunks_metadata(d)
-    write_chunks_metadata(chunks_metadata, file_path)
-    chunks_metadata_roundtripped = read_chunks_metadata(file_path)
-    print(chunks_metadata.dtypes)
-    print(chunks_metadata_roundtripped.dtypes)
-    assert_frame_equal(chunks_metadata, chunks_metadata_roundtripped)
+    chunks_metadata = get_chunks_metadata(d, "example.dat")
+    save_chunks_meta(chunks_metadata, file_path)
+    chunks_metadata_roundtripped = load_chunks_meta(file_path)
+    assert chunks_metadata_roundtripped == chunks_metadata
 
 
 def test_iter_measurements():
     paths = (p for p in (_DATA_DIR / "adjacent_files").iterdir())
-    chunk_map = build_chunk_map(paths)
-    measurements = iter_measurements(chunk_map)  # using default max_gap
+    chunks_meta = itertools.chain(
+        *(get_chunks_metadata(read_raw(path), path) for path in paths)
+    )
+    measurements_meta = iter_measurements_meta(chunks_meta)  # using default max_gap
+    measurements = iter_measurements(measurements_meta)
 
     # These were established by manually sifting through the files
     expected_chunks = [
@@ -86,11 +89,11 @@ def test_iter_measurements():
 
 def test_dont_join_chunks_if_time_gap_is_too_large():
     paths = (p for p in (_DATA_DIR / "adjacent_files").iterdir())
-    chunk_map = build_chunk_map(paths)
-
-    # Timedelta 0 seconds ensures that chunks are too far apart and will be counted
-    # as beloning to separate measurements
-    measurements = iter_measurements(chunk_map, pd.Timedelta(0, "s"))
+    chunks_meta = itertools.chain(
+        *(get_chunks_metadata(read_raw(path), path) for path in paths)
+    )
+    measurements_meta = iter_measurements_meta(chunks_meta, max_gap=pd.Timedelta(0))
+    measurements = iter_measurements(measurements_meta)
 
     # These were established by manually sifting through the files
     expected_chunks = [

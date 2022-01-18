@@ -1,6 +1,12 @@
+from __future__ import annotations
+from dataclasses import dataclass
+import dataclasses
+import json
 from os import PathLike
-from typing import Iterable, Iterator, NewType, cast
+from pathlib import Path
+from typing import Any, Iterable, Iterator, List, NewType, cast, Union
 import pandas as pd
+import numpy as np
 
 
 class PicarroColumns:
@@ -60,20 +66,36 @@ DataFile = NewType("DataFile", pd.DataFrame)
 Chunk = NewType("Chunk", pd.DataFrame)
 Measurement = NewType("Measurement", pd.DataFrame)
 
-# ChunkMeta: A DataFrame naming start and end times for a chunk, and the active solenoid
-ChunkMeta = NewType("ChunkMeta", pd.DataFrame)
-
-# A combination of information from ChunkMetas and Picarro data file paths
-ChunkMap = NewType("ChunkMap", pd.DataFrame)
+_DATETIME64_UNIT = "ms"
 
 
-class ChunkMetaColumns:
-    start = "start"
-    end = "end"
-    solenoid_valve = "solenoid_valve"
+@dataclass
+class ChunkMeta:
+    path: str
+    start: pd.Timestamp
+    end: pd.Timestamp
+    solenoid_valve: int
+
+    def to_dict(self) -> dict[str, Union[str, int]]:
+        obj = dataclasses.asdict(self)
+        for key in ["start", "end"]:
+            v = obj[key]
+            assert isinstance(v, pd.Timestamp)
+            obj[key] = str(v)
+        return obj
+
+    @staticmethod
+    def from_dict(obj: dict[str, Any]) -> ChunkMeta:
+        for key in ["start", "end"]:
+            v = pd.Timestamp(obj[key])
+            obj[key] = v
+        return ChunkMeta(**obj)
 
 
-def read_raw(path: PathLike) -> DataFile:
+MeasurementMeta = List[ChunkMeta]
+
+
+def read_raw(path: Union[PathLike, str]) -> DataFile:
     d = pd.read_csv(path, sep=r"\s+").pipe(_reindex_timestamp)
     return cast(DataFile, d)
 
@@ -87,7 +109,7 @@ def _reindex_timestamp(d):
     # conversion by first converting to integer milliseconds.
     timestamp = pd.to_datetime(
         d[PicarroColumns.EPOCH_TIME].mul(1e3).round().astype("int64"),
-        unit="ms",
+        unit=_DATETIME64_UNIT,
     )
     if not timestamp.is_unique:
         first_duplicate = timestamp.loc[timestamp.duplicated()].iloc[0]
@@ -112,94 +134,78 @@ def _drop_data_between_valves(data):
     return data[~is_between_valves].astype({PicarroColumns.solenoid_valves: int})
 
 
-def _get_chunk_metadata(chunk: Chunk):
+def _get_chunk_metadata(chunk: Chunk, path: str):
     solenoid_valves = chunk[PicarroColumns.solenoid_valves].unique()
     assert len(solenoid_valves) == 1, solenoid_valves
     (the_valve,) = solenoid_valves
-    return {
-        ChunkMetaColumns.start: chunk.index[0],
-        ChunkMetaColumns.end: chunk.index[-1],
-        ChunkMetaColumns.solenoid_valve: the_valve,
-    }
-
-
-def get_chunks_metadata(d: DataFile) -> ChunkMeta:
-    result = pd.DataFrame(list(map(_get_chunk_metadata, iter_chunks(d))))
-    return cast(ChunkMeta, result)
-
-
-def write_chunks_metadata(chunks_metadata, path: PathLike):
-    chunks_metadata.to_csv(path, index=False)
-
-
-def read_chunks_metadata(path: PathLike) -> ChunkMeta:
-    result = pd.read_csv(
+    return ChunkMeta(
         path,
-        parse_dates=[ChunkMetaColumns.start, ChunkMetaColumns.end],
-        dtype={
-            ChunkMetaColumns.solenoid_valve: int,
-        },
-    )
-    return cast(ChunkMeta, result)
-
-
-def build_chunk_map(paths: Iterable[PathLike]) -> ChunkMap:
-    chunk_map = (
-        pd.concat(
-            {path: get_chunks_metadata(read_raw(path)) for path in paths},
-            names=["path", "chunk_index"],
-        )
-        .reset_index()
-        .sort_values(ChunkMetaColumns.start)
+        chunk.index[0],
+        chunk.index[-1],
+        int(the_valve),
     )
 
-    return cast(ChunkMap, chunk_map)
+
+def get_chunks_metadata(data: DataFile, path: Union[Path, str]) -> List[ChunkMeta]:
+    return [_get_chunk_metadata(chunk, str(path)) for chunk in iter_chunks(data)]
 
 
-def _check_no_overlaps(measurement_map):
-    overlapping = measurement_map["time_gap_from_previous"] < pd.Timedelta(0)  # type: ignore
-    if overlapping.any():
-        violator_index = overlapping[overlapping].index[0]
-        violators = measurement_map.loc[violator_index - 1 : violator_index]
-        raise ValueError(f"overlapping chunks: {violators}")
+def save_chunks_meta(chunks_meta: List[ChunkMeta], path: Path):
+    with open(path, "x") as f:
+        f.write(json.dumps([c.to_dict() for c in chunks_meta]))
+
+
+def load_chunks_meta(path: Path) -> List[ChunkMeta]:
+    with open(path, "r") as f:
+        data = json.loads(f.read())
+    return [ChunkMeta.from_dict(item) for item in data]
+
+
+def iter_measurements_meta(
+    chunks: Iterable[ChunkMeta], max_gap: pd.Timedelta = DEFAULT_MAX_GAP_BETWEEN_CHUNKS
+) -> Iterator[MeasurementMeta]:
+    chunks = list(chunks)
+    chunks.sort(key=lambda c: c.start.to_numpy())
+
+    while chunks:
+        collected = [chunks.pop(0)]
+
+        while chunks:
+            prev_chunk = collected[-1]
+            candidate = chunks.pop(0)
+
+            time_gap = candidate.start - prev_chunk.end  # type: ignore
+            if time_gap < pd.Timedelta(0):
+                raise ValueError(f"overlapping chunks: {prev_chunk} {candidate}")
+
+            is_adjacent = time_gap < max_gap
+            same_valve = prev_chunk.solenoid_valve == candidate.solenoid_valve
+
+            if is_adjacent and same_valve:
+                collected.append(candidate)
+            else:
+                chunks.insert(0, candidate)
+                break
+
+        yield collected
 
 
 def iter_measurements(
-    chunk_map: ChunkMap, max_gap: pd.Timedelta = DEFAULT_MAX_GAP_BETWEEN_CHUNKS
+    measurement_metas: Iterable[MeasurementMeta],
 ) -> Iterator[Measurement]:
-    measurement_map = chunk_map.assign(
-        time_gap_from_previous=lambda d: (
-            d[ChunkMetaColumns.start] - d[ChunkMetaColumns.end].shift(1)
-        ),
-        is_adjacent_to_previous=lambda d: (d["time_gap_from_previous"] < max_gap),
-        same_valve_as_previous=lambda d: (
-            d[ChunkMetaColumns.solenoid_valve].diff() == 0
-        ),
-        chunk_starts_new_measurement=lambda d: (
-            ~(d["same_valve_as_previous"] & d["is_adjacent_to_previous"])
-        ).fillna(
-            True
-        ),  # fillna(True) needed for the first row
-        measurement_number=lambda d: d["chunk_starts_new_measurement"].cumsum(),
-    )
-    _check_no_overlaps(measurement_map)
-
     read_cache = {
-        "path": None,
-        "chunks": [],
+        "path": Path(),
+        "data": pd.DataFrame(),
     }
-    def read_chunk(path, chunk_index):
-        if path == read_cache["path"]:
-            chunks = read_cache["chunks"]
-        else:
-            chunks = list(iter_chunks(read_raw(path)))
-            read_cache["path"] = path
-            read_cache["chunks"] = chunks
 
-        return chunks[chunk_index]
+    def read_chunk(chunk_meta: ChunkMeta):
+        if chunk_meta.path != read_cache["path"]:
+            read_cache["path"] = chunk_meta.path
+            read_cache["data"] = read_raw(chunk_meta.path)
 
-    for _, g in measurement_map.groupby("measurement_number"):
-        measurement = pd.concat(
-            [read_chunk(row["path"], row["chunk_index"]) for _, row in g.iterrows()]
-        )
+        data = read_cache["data"]
+        return data.loc[chunk_meta.start : chunk_meta.end]
+
+    for measurement_meta in measurement_metas:
+        measurement = pd.concat(list(map(read_chunk, measurement_meta)))
         yield cast(Measurement, measurement)
