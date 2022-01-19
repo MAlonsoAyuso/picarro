@@ -150,15 +150,43 @@ def get_chunks_metadata(data: DataFile, path: Union[Path, str]) -> List[ChunkMet
     return [_get_chunk_metadata(chunk, str(path)) for chunk in iter_chunks(data)]
 
 
-def save_chunks_meta(chunks_meta: List[ChunkMeta], path: Path):
+def _save_json(obj: Any, path: Path):
+    path.parent.mkdir(exist_ok=True, parents=True)
     with open(path, "x") as f:
-        f.write(json.dumps([c.to_dict() for c in chunks_meta]))
+        f.write(json.dumps(obj, indent=2))
+
+
+def save_chunks_meta(chunks_meta: List[ChunkMeta], path: Path):
+    _save_json([c.to_dict() for c in chunks_meta], path)
+
+
+def save_measurements_meta(measurements_meta: List[MeasurementMeta], path: Path):
+    _save_json(
+        [
+            [c.to_dict() for c in measurement_meta]
+            for measurement_meta in measurements_meta
+        ],
+        path,
+    )
+
+
+def _load_json(path: Path) -> Any:
+    with open(path, "r") as f:
+        return json.loads(f.read())
+
+
+def _build_chunk_list(data: Any) -> List[ChunkMeta]:
+    return [ChunkMeta.from_dict(item) for item in data]
 
 
 def load_chunks_meta(path: Path) -> List[ChunkMeta]:
-    with open(path, "r") as f:
-        data = json.loads(f.read())
-    return [ChunkMeta.from_dict(item) for item in data]
+    data = _load_json(path)
+    return _build_chunk_list(data)
+
+
+def load_measurements_meta(path: Path) -> List[MeasurementMeta]:
+    data = _load_json(path)
+    return list(map(_build_chunk_list, data))
 
 
 def iter_measurements_meta(

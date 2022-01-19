@@ -3,12 +3,14 @@ import pytest
 from picarro.read import (
     get_chunks_metadata,
     iter_measurements_meta,
+    load_measurements_meta,
     read_raw,
     iter_chunks,
     load_chunks_meta,
     save_chunks_meta,
     PicarroColumns,
     iter_measurements,
+    save_measurements_meta,
 )
 import pathlib
 import pandas as pd
@@ -119,3 +121,13 @@ def test_dont_join_chunks_if_time_gap_is_too_large():
     ]
 
     assert seen_chunks == expected_chunks
+
+
+def test_measurements_meta_round_trip(tmp_path: pathlib.Path):
+    file_path = tmp_path / "measurements.json"
+    d = read_raw(data_path("example.dat"))
+    chunks_metadata = get_chunks_metadata(d, "example.dat")
+    measurements_meta = list(iter_measurements_meta(chunks_metadata))
+    save_measurements_meta(measurements_meta, file_path)
+    measurements_meta_roundtripped = load_measurements_meta(file_path)
+    assert measurements_meta_roundtripped == measurements_meta
