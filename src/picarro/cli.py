@@ -1,4 +1,3 @@
-import itertools
 from pathlib import Path
 import click
 import picarro.config

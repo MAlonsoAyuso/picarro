@@ -4,10 +4,16 @@ from hashlib import sha256
 import itertools
 import os
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Iterator, List
 from picarro.config import AppConfig
 import picarro.read
 import pandas as pd
+import json
+import cattr.preconf.json
+
+_json_converter = cattr.preconf.json.make_converter()
+_json_converter.register_unstructure_hook(pd.Timestamp, str)
+_json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
 
 _CONFIG_TIME_UNIT = "s"
 _CHUNKS_META_DIR = "chunks"
@@ -43,7 +49,7 @@ def _create_chunks_meta(config: AppConfig, data_file_path: Path):
         return
     data = picarro.read.read_raw(data_file_path)
     chunks_meta = picarro.read.get_chunks_metadata(data, data_file_path)
-    picarro.read.save_chunks_meta(chunks_meta, meta_path)
+    _save_json(_json_converter.unstructure(chunks_meta), meta_path)
 
 
 def _load_chunks_meta(
@@ -51,7 +57,8 @@ def _load_chunks_meta(
 ) -> list[picarro.read.ChunkMeta]:
     assert data_file_path.is_absolute(), data_file_path
     meta_path = _get_chunks_meta_path(config, data_file_path)
-    return picarro.read.load_chunks_meta(meta_path)
+    data = _load_json(meta_path)
+    return _json_converter.structure(data, List[picarro.read.ChunkMeta])
 
 
 def _get_chunks_meta_path(config: AppConfig, data_file_path: Path) -> Path:
@@ -64,3 +71,14 @@ def _repr_hash(obj: Any) -> str:
     m = sha256()
     m.update(repr(obj).encode())
     return m.hexdigest()
+
+
+def _save_json(obj: Any, path: Path):
+    path.parent.mkdir(exist_ok=True, parents=True)
+    with open(path, "x") as f:
+        f.write(json.dumps(obj, indent=2))
+
+
+def _load_json(path: Path) -> Any:
+    with open(path, "r") as f:
+        return json.loads(f.read())

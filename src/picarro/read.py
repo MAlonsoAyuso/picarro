@@ -1,12 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import dataclasses
-import json
 from os import PathLike
 from pathlib import Path
 from typing import Any, Iterable, Iterator, List, NewType, cast, Union
 import pandas as pd
-import numpy as np
 
 
 class PicarroColumns:
@@ -74,21 +72,6 @@ class ChunkMeta:
     end: pd.Timestamp
     solenoid_valve: int
 
-    def to_dict(self) -> dict[str, Union[str, int]]:
-        obj = dataclasses.asdict(self)
-        for key in ["start", "end"]:
-            v = obj[key]
-            assert isinstance(v, pd.Timestamp)
-            obj[key] = str(v)
-        return obj
-
-    @staticmethod
-    def from_dict(obj: dict[str, Any]) -> ChunkMeta:
-        for key in ["start", "end"]:
-            v = pd.Timestamp(obj[key])
-            obj[key] = v
-        return ChunkMeta(**obj)
-
 
 MeasurementMeta = List[ChunkMeta]
 
@@ -146,45 +129,6 @@ def _get_chunk_metadata(chunk: Chunk, path: str):
 
 def get_chunks_metadata(data: DataFile, path: Union[Path, str]) -> List[ChunkMeta]:
     return [_get_chunk_metadata(chunk, str(path)) for chunk in iter_chunks(data)]
-
-
-def _save_json(obj: Any, path: Path):
-    path.parent.mkdir(exist_ok=True, parents=True)
-    with open(path, "x") as f:
-        f.write(json.dumps(obj, indent=2))
-
-
-def save_chunks_meta(chunks_meta: List[ChunkMeta], path: Path):
-    _save_json([c.to_dict() for c in chunks_meta], path)
-
-
-def save_measurements_meta(measurements_meta: List[MeasurementMeta], path: Path):
-    _save_json(
-        [
-            [c.to_dict() for c in measurement_meta]
-            for measurement_meta in measurements_meta
-        ],
-        path,
-    )
-
-
-def _load_json(path: Path) -> Any:
-    with open(path, "r") as f:
-        return json.loads(f.read())
-
-
-def _build_chunk_list(data: Any) -> List[ChunkMeta]:
-    return [ChunkMeta.from_dict(item) for item in data]
-
-
-def load_chunks_meta(path: Path) -> List[ChunkMeta]:
-    data = _load_json(path)
-    return _build_chunk_list(data)
-
-
-def load_measurements_meta(path: Path) -> List[MeasurementMeta]:
-    data = _load_json(path)
-    return list(map(_build_chunk_list, data))
 
 
 def iter_measurements_meta(

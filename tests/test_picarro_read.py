@@ -1,16 +1,13 @@
 import itertools
 import pytest
 from picarro.read import (
+    ChunkMeta,
     get_chunks_metadata,
     iter_measurements_meta,
-    load_measurements_meta,
     read_raw,
     iter_chunks,
-    load_chunks_meta,
-    save_chunks_meta,
     PicarroColumns,
     iter_measurements,
-    save_measurements_meta,
 )
 import pathlib
 import pandas as pd
@@ -40,21 +37,33 @@ def test_chunks_have_unique_int_solenoid_valves():
 
 
 def test_chunk_metadata_is_correct():
-    # example_chunks.json is verified to be the desired outcome
     path = data_path("example.dat")
-    expected_chunks = load_chunks_meta(data_path("example_chunks.json"))
+
+    # these have been manually verified to be the desired outcome
+    expected_chunks = [
+        ChunkMeta(
+            path="example.dat",
+            start=pd.Timestamp("2021-05-07 00:01:15.170"),
+            end=pd.Timestamp("2021-05-07 00:02:19.338000"),
+            solenoid_valve=5,
+        ),
+        ChunkMeta(
+            path="example.dat",
+            start=pd.Timestamp("2021-05-07 00:02:21.696"),
+            end=pd.Timestamp("2021-05-07 00:22:19.405000"),
+            solenoid_valve=6,
+        ),
+        ChunkMeta(
+            path="example.dat",
+            start=pd.Timestamp("2021-05-07 00:22:20.719"),
+            end=pd.Timestamp("2021-05-07 00:24:23.092000"),
+            solenoid_valve=7,
+        ),
+    ]
+
     data = read_raw(path)
     chunks = get_chunks_metadata(data, "example.dat")
     assert expected_chunks == chunks
-
-
-def test_chunk_metadata_round_trip_file(tmp_path: pathlib.Path):
-    file_path = tmp_path / "chunks.json"
-    d = read_raw(data_path("example.dat"))
-    chunks_metadata = get_chunks_metadata(d, "example.dat")
-    save_chunks_meta(chunks_metadata, file_path)
-    chunks_metadata_roundtripped = load_chunks_meta(file_path)
-    assert chunks_metadata_roundtripped == chunks_metadata
 
 
 def test_iter_measurements():
@@ -62,13 +71,8 @@ def test_iter_measurements():
     chunks_meta = itertools.chain(
         *(get_chunks_metadata(read_raw(path), path) for path in paths)
     )
-    measurements_meta = iter_measurements_meta(
-        chunks_meta, max_gap=pd.Timedelta(5, "s")
-    )
-    measurements = iter_measurements(measurements_meta)
-
     # These were established by manually sifting through the files
-    expected_chunks = [
+    expected_measurements = [
         dict(solenoid_valve=13, length=217),
         dict(solenoid_valve=14, length=1789),
         dict(solenoid_valve=15, length=1787),
@@ -80,15 +84,18 @@ def test_iter_measurements():
         dict(solenoid_valve=6, length=716),
     ]
 
-    seen_chunks = [
+    measurements_meta = iter_measurements_meta(
+        chunks_meta, max_gap=pd.Timedelta(5, "s")
+    )
+    measurements = [
         dict(
             solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
             length=len(m),
         )
-        for m in measurements
+        for m in iter_measurements(measurements_meta)
     ]
 
-    assert seen_chunks == expected_chunks
+    assert measurements == expected_measurements
 
 
 def test_dont_join_chunks_if_time_gap_is_too_large():
@@ -123,15 +130,3 @@ def test_dont_join_chunks_if_time_gap_is_too_large():
     ]
 
     assert seen_chunks == expected_chunks
-
-
-def test_measurements_meta_round_trip(tmp_path: pathlib.Path):
-    file_path = tmp_path / "measurements.json"
-    d = read_raw(data_path("example.dat"))
-    chunks_metadata = get_chunks_metadata(d, "example.dat")
-    measurements_meta = list(
-        iter_measurements_meta(chunks_metadata, max_gap=pd.Timedelta(0))
-    )
-    save_measurements_meta(measurements_meta, file_path)
-    measurements_meta_roundtripped = load_measurements_meta(file_path)
-    assert measurements_meta_roundtripped == measurements_meta

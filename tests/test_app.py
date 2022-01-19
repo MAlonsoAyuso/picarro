@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import shutil
 import pytest
@@ -5,26 +6,27 @@ import picarro.app
 from picarro.config import AppConfig, UserConfig, ReadConfig, FitConfig, OutputConfig
 from picarro.read import Measurement, PicarroColumns
 
+
 config_example_src = Path(__file__).absolute().parent / "config_example.toml"
 assert config_example_src.exists()
+
+_EXAMPLE_DATA_DIR = Path(__file__).parent.parent / "example_data"
 
 
 @pytest.fixture
 def app_config(tmp_path: Path) -> AppConfig:
-    return AppConfig.from_toml(config_example_src)
-
-
-def test_create_config(tmp_path: Path):
-    config_path = tmp_path / "config.toml"
+    config_path = tmp_path / "config-filename-stem.toml"
     shutil.copyfile(config_example_src, config_path)
+    return AppConfig.from_toml(config_path)
 
-    conf = AppConfig.from_toml(config_path)
+
+def test_create_config(app_config: AppConfig, tmp_path: Path):
     expected_conf = AppConfig(
-        src_dir=config_path.parent,
-        results_subdir=config_path.stem,
+        src_dir=tmp_path,
+        results_subdir="config-filename-stem",
         user=UserConfig(
             ReadConfig(
-                src="../example_data/adjacent_files/**/*.dat",
+                src="data-dir/**/*.dat",
                 columns=["N2O", "CH4"],
                 max_gap=5,
                 min_length=1080,
@@ -42,13 +44,18 @@ def test_create_config(tmp_path: Path):
         ),
     )
 
-    assert conf == expected_conf
+    assert app_config == expected_conf
 
-    assert conf.cache_dir_absolute.is_absolute(), conf.cache_dir_absolute
-    assert conf.results_dir_absolute.is_absolute(), conf.results_dir_absolute
+    assert app_config.cache_dir_absolute.is_absolute(), app_config.cache_dir_absolute
+    assert (
+        app_config.results_dir_absolute.is_absolute()
+    ), app_config.results_dir_absolute
 
 
-def test_iter_measurements(app_config: AppConfig):
+def test_integrated(app_config: AppConfig, tmp_path: Path):
+    data_dir = tmp_path / "data-dir" / "nested" / "path"
+    shutil.copytree(_EXAMPLE_DATA_DIR / "adjacent_files", data_dir)
+
     # These were established by manually sifting through the files
     expected_measurements = [
         dict(solenoid_valve=13, length=217),
@@ -66,8 +73,8 @@ def test_iter_measurements(app_config: AppConfig):
         (solenoid_valve,) = m[PicarroColumns.solenoid_valves].unique()
         return dict(solenoid_valve=solenoid_valve, length=len(m))
 
-    seen_measurements = [
+    measurements = [
         summarize_measurement(m) for m in picarro.app.iter_measurements(app_config)
     ]
 
-    assert seen_measurements == expected_measurements
+    assert measurements == expected_measurements
