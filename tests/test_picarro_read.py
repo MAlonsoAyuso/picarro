@@ -62,7 +62,9 @@ def test_iter_measurements():
     chunks_meta = itertools.chain(
         *(get_chunks_metadata(read_raw(path), path) for path in paths)
     )
-    measurements_meta = iter_measurements_meta(chunks_meta)  # using default max_gap
+    measurements_meta = iter_measurements_meta(
+        chunks_meta, max_gap=pd.Timedelta(5, "s")
+    )
     measurements = iter_measurements(measurements_meta)
 
     # These were established by manually sifting through the files
@@ -127,7 +129,9 @@ def test_measurements_meta_round_trip(tmp_path: pathlib.Path):
     file_path = tmp_path / "measurements.json"
     d = read_raw(data_path("example.dat"))
     chunks_metadata = get_chunks_metadata(d, "example.dat")
-    measurements_meta = list(iter_measurements_meta(chunks_metadata))
+    measurements_meta = list(
+        iter_measurements_meta(chunks_metadata, max_gap=pd.Timedelta(0))
+    )
     save_measurements_meta(measurements_meta, file_path)
     measurements_meta_roundtripped = load_measurements_meta(file_path)
     assert measurements_meta_roundtripped == measurements_meta

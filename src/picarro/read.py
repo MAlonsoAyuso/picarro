@@ -55,8 +55,6 @@ CONC_UNITS = {
     PicarroColumns.N2O: "ppmv",
 }
 
-DEFAULT_MAX_GAP_BETWEEN_CHUNKS = pd.Timedelta(5, "s")
-
 # DataFile: A DataFrame from a whole .dat file (after some basic parsing)
 # Chunk: A DataFrame with a contiguous subset of a DataFile,
 #   with exactly one solenoid valve value.
@@ -190,7 +188,7 @@ def load_measurements_meta(path: Path) -> List[MeasurementMeta]:
 
 
 def iter_measurements_meta(
-    chunks: Iterable[ChunkMeta], max_gap: pd.Timedelta = DEFAULT_MAX_GAP_BETWEEN_CHUNKS
+    chunks: Iterable[ChunkMeta], max_gap: pd.Timedelta
 ) -> Iterator[MeasurementMeta]:
     chunks = list(chunks)
     chunks.sort(key=lambda c: c.start.to_numpy())
