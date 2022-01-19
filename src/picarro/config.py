@@ -56,7 +56,7 @@ class AppConfig:
         with open(path, "r") as f:
             data = toml.load(f)
         user_config = _toml_converter.structure(data, UserConfig)
-        return AppConfig(path.parent, path.stem, user_config)
+        return AppConfig(path.parent.absolute(), path.stem, user_config)
 
     @property
     def cache_dir_absolute(self) -> Path:
