@@ -44,6 +44,9 @@ def test_create_config(tmp_path: Path):
 
     assert conf == expected_conf
 
+    assert conf.cache_dir_absolute.is_absolute(), conf.cache_dir_absolute
+    assert conf.results_dir_absolute.is_absolute(), conf.results_dir_absolute
+
 
 def test_iter_measurements(app_config: AppConfig):
     # These were established by manually sifting through the files
