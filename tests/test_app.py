@@ -78,3 +78,13 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     ]
 
     assert measurement_summaries == expected_summaries
+
+    data_summaries = [
+        dict(
+            solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
+            length=len(m),
+        )
+        for m in picarro.app.iter_measurements(app_config)
+    ]
+
+    assert data_summaries == expected_summaries
