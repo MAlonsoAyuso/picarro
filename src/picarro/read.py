@@ -71,9 +71,29 @@ class ChunkMeta:
     start: pd.Timestamp
     end: pd.Timestamp
     solenoid_valve: int
+    length: int
 
 
-MeasurementMeta = List[ChunkMeta]
+@dataclass
+class MeasurementMeta:
+    chunks: List[ChunkMeta]
+    start: pd.Timestamp
+    end: pd.Timestamp
+    solenoid_valve: int
+    length: int
+
+    @staticmethod
+    def from_chunks_meta(chunks_meta: List[ChunkMeta]) -> MeasurementMeta:
+        solenoid_valves = {c.solenoid_valve for c in chunks_meta}
+        assert len(solenoid_valves) == 1, solenoid_valves
+        (solenoid_valve,) = solenoid_valves
+        return MeasurementMeta(
+            chunks_meta,
+            chunks_meta[0].start,
+            chunks_meta[-1].end,
+            solenoid_valve,
+            sum(c.length for c in chunks_meta),
+        )
 
 
 def read_raw(path: Union[PathLike, str]) -> DataFile:
@@ -124,6 +144,7 @@ def _get_chunk_metadata(chunk: Chunk, path: str):
         chunk.index[0],
         chunk.index[-1],
         int(the_valve),
+        len(chunk),
     )
 
 
@@ -157,7 +178,7 @@ def iter_measurements_meta(
                 chunks.insert(0, candidate)
                 break
 
-        yield collected
+        yield MeasurementMeta.from_chunks_meta(collected)
 
 
 def iter_measurements(
@@ -177,5 +198,5 @@ def iter_measurements(
         return data.loc[chunk_meta.start : chunk_meta.end]
 
     for measurement_meta in measurement_metas:
-        measurement = pd.concat(list(map(read_chunk, measurement_meta)))
+        measurement = pd.concat(list(map(read_chunk, measurement_meta.chunks)))
         yield cast(Measurement, measurement)

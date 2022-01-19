@@ -19,18 +19,21 @@ _CONFIG_TIME_UNIT = "s"
 _CHUNKS_META_DIR = "chunks"
 
 
-def iter_measurements(config: AppConfig) -> Iterator[picarro.read.Measurement]:
+def iter_measurements_meta(config: AppConfig) -> Iterator[picarro.read.MeasurementMeta]:
     file_paths = _glob_recursive_in_dir(config.user.measurements.src, config.src_dir)
     for path in file_paths:
         _create_chunks_meta(config, path)
 
     chunks_meta = (_load_chunks_meta(config, path) for path in file_paths)
 
-    measurements_meta = picarro.read.iter_measurements_meta(
+    return picarro.read.iter_measurements_meta(
         itertools.chain(*chunks_meta),
         pd.Timedelta(config.user.measurements.max_gap, _CONFIG_TIME_UNIT),
     )
 
+
+def iter_measurements(config: AppConfig) -> Iterator[picarro.read.Measurement]:
+    measurements_meta = iter_measurements_meta(config)
     return picarro.read.iter_measurements(measurements_meta)
 
 

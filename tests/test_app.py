@@ -4,7 +4,7 @@ import shutil
 import pytest
 import picarro.app
 from picarro.config import AppConfig, UserConfig, ReadConfig, FitConfig, OutputConfig
-from picarro.read import Measurement, PicarroColumns
+from picarro.read import Measurement, MeasurementMeta, PicarroColumns
 
 
 config_example_src = Path(__file__).absolute().parent / "config_example.toml"
@@ -57,7 +57,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     shutil.copytree(_EXAMPLE_DATA_DIR / "adjacent_files", data_dir)
 
     # These were established by manually sifting through the files
-    expected_measurements = [
+    expected_summaries = [
         dict(solenoid_valve=13, length=217),
         dict(solenoid_valve=14, length=1789),
         dict(solenoid_valve=15, length=1787),
@@ -69,12 +69,12 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         dict(solenoid_valve=6, length=716),
     ]
 
-    def summarize_measurement(m: Measurement):
-        (solenoid_valve,) = m[PicarroColumns.solenoid_valves].unique()
-        return dict(solenoid_valve=solenoid_valve, length=len(m))
+    def summarize_measurement(mm: MeasurementMeta):
+        return dict(solenoid_valve=mm.solenoid_valve, length=mm.length)
 
-    measurements = [
-        summarize_measurement(m) for m in picarro.app.iter_measurements(app_config)
+    measurement_summaries = [
+        summarize_measurement(mm)
+        for mm in picarro.app.iter_measurements_meta(app_config)
     ]
 
-    assert measurements == expected_measurements
+    assert measurement_summaries == expected_summaries
