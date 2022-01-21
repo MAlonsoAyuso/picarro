@@ -7,6 +7,8 @@ import toml
 import cattr.preconf.tomlkit
 import pandas as pd
 
+from picarro.read import PicarroColumns
+
 CONFIG_TIME_UNIT = "s"
 
 
@@ -48,6 +50,9 @@ class FluxEstimationConfig:
 class OutputConfig:
     cache_dir: str = ".picarro_cache"
     results_dir: str = "picarro_results"
+    export_columns_extra: List[str] = field(
+        default_factory=lambda: [PicarroColumns.solenoid_valves]
+    )
 
 
 @dataclass(frozen=True)

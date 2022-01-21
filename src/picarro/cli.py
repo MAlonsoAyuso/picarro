@@ -20,8 +20,7 @@ def cli(ctx: click.Context, config: Path):
 
 @cli.command()
 @click.pass_context
-def print_measurements(ctx: click.Context):
+def export_measurements(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, picarro.config.AppConfig), config
-    for m in picarro.app.iter_measurements(config):
-        click.echo(f"Measurement len={len(m)}")
+    picarro.app.export_measurements(config)

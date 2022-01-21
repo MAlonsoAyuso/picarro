@@ -5,6 +5,10 @@
 - Build CLI
 - Write docs
 - Decide on a license and update package metadata
+- Minor things
+  - Cache in results directory
+  - Don't call it EPOCH_TIME; create a new column datetime_utc
+  - Allow separate config for read and analyze columns
 
 ## Maybe later
 

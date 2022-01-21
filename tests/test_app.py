@@ -1,7 +1,9 @@
+from ast import Call
 import os
 from pathlib import Path
 import shutil
 import itertools
+from typing import Callable
 import pytest
 import picarro.app
 from picarro.config import (
@@ -64,6 +66,14 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
     ), app_config.results_dir_absolute
 
 
+def call_immediately(func: Callable[[], None]) -> None:
+    func()
+
+
+def summarize_measurement(mm: MeasurementMeta):
+    return dict(solenoid_valve=mm.solenoid_valve, length=mm.length)
+
+
 def test_integrated(app_config: AppConfig, tmp_path: Path):
     data_dir = tmp_path / "data-dir" / "nested" / "path"
     shutil.copytree(_EXAMPLE_DATA_DIR / "adjacent_files", data_dir)
@@ -81,38 +91,64 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         # one removed here compared to the full set, because it's too short
     ]
 
-    def summarize_measurement(mm: MeasurementMeta):
-        return dict(solenoid_valve=mm.solenoid_valve, length=mm.length)
+    @call_immediately
+    def test_measurement_metadata():
+        # Check that measurement metadata objects are as expected
+        measurement_summaries = [
+            summarize_measurement(mm)
+            for mm in picarro.app.iter_measurements_meta(app_config)
+        ]
 
-    # Check that measurement metadata objects are as expected
-    measurement_summaries = [
-        summarize_measurement(mm)
-        for mm in picarro.app.iter_measurements_meta(app_config)
-    ]
+        assert measurement_summaries == expected_summaries
 
-    assert measurement_summaries == expected_summaries
+    @call_immediately
+    def test_measurement_data():
+        # Check that measurement datasets are as expected
+        data_summaries = [
+            dict(
+                solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
+                length=len(m),
+            )
+            for m in picarro.app.iter_measurements(app_config)
+        ]
 
-    # Check that measurement datasets are as expected
-    data_summaries = [
-        dict(
-            solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
-            length=len(m),
+        assert data_summaries == expected_summaries
+
+    @call_immediately
+    def test_analysis_working():
+        # Test analysis
+        analysis_results = list(picarro.app.iter_analysis_results(app_config))
+        expected_analysis_results = list(
+            itertools.product(expected_summaries, app_config.user.measurements.columns)
         )
-        for m in picarro.app.iter_measurements(app_config)
-    ]
+        seen_analysis_results = [
+            (summarize_measurement(ar.measurement_meta), ar.estimator.column)
+            for ar in analysis_results
+        ]
+        assert expected_analysis_results == seen_analysis_results
 
-    assert data_summaries == expected_summaries
+    @call_immediately
+    def test_will_not_overwrite():
+        # Test that it won't write into a non-empty results directory
+        app_config.results_dir_absolute.mkdir()
+        blocking_file_path = app_config.results_dir_absolute / "file"
+        blocking_file_path.touch()
+        with pytest.raises(FileExistsError):
+            picarro.app.export_measurements(app_config)
+        os.remove(blocking_file_path)
 
-    # Test analysis
-    analysis_results = list(picarro.app.iter_analysis_results(app_config))
-
-    expected_analysis_results = list(
-        itertools.product(expected_summaries, app_config.user.measurements.columns)
-    )
-
-    seen_analysis_results = [
-        (summarize_measurement(ar.measurement_meta), ar.estimator.column)
-        for ar in analysis_results
-    ]
-
-    assert expected_analysis_results == seen_analysis_results
+    @call_immediately
+    def test_export_measurement_data():
+        # Test exporting measurements
+        picarro.app.export_measurements(app_config)
+        paths = list((app_config.results_dir_absolute / "measurements").iterdir())
+        assert len(paths) == len(expected_summaries)
+        for path, summary in zip(sorted(paths), expected_summaries):
+            data = pd.read_csv(path, index_col="EPOCH_TIME")
+            assert list(data.columns) == [
+                *app_config.user.measurements.columns,
+                *app_config.user.output.export_columns_extra,
+            ]
+            assert len(data) == summary["length"]
+            (valve,) = data[PicarroColumns.solenoid_valves].unique()
+            assert valve == summary["solenoid_valve"]

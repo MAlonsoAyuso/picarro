@@ -5,7 +5,7 @@ from hashlib import sha256
 import itertools
 import os
 from pathlib import Path
-from typing import Any, Iterator, List
+from typing import Any, Callable, Iterator, List
 from picarro.analyze import FluxEstimator, estimate_flux
 from picarro.config import AppConfig
 import picarro.read
@@ -68,6 +68,41 @@ def iter_analysis_results(config: AppConfig) -> Iterator[AnalysisResult]:
                 measurement_meta,
                 estimate_flux(config.user.flux_estimation, measurement[column]),
             )
+
+
+def claim_outdir(config: AppConfig) -> Path:
+    outdir = config.results_dir_absolute
+    marker_file_path = outdir / ".picarro-output"
+
+    if outdir.exists() and not outdir.is_dir():
+        raise FileExistsError(
+            f"Cannot claim output directory because of existing non-directory {outdir}."
+        )
+
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    if not marker_file_path.exists() and list(outdir.iterdir()):
+        raise FileExistsError(
+            "Cannot claim output directory. "
+            f"Expected empty or non-existent directory at {outdir}"
+        )
+
+    marker_file_path.touch()
+
+    return outdir
+
+
+def export_measurements(config: AppConfig):
+    outdir = claim_outdir(config) / "measurements"
+    outdir.mkdir(exist_ok=True)
+    columns = [
+        *config.user.measurements.columns,
+        *config.user.output.export_columns_extra,
+    ]
+    for measurement in iter_measurements(config):
+        file_name = measurement.index[0].isoformat().replace(":", "_") + ".csv"
+        path = outdir / file_name
+        measurement[columns].to_csv(path)
 
 
 def _glob_recursive_in_dir(pattern: str, glob_dir: Path) -> list[Path]:
