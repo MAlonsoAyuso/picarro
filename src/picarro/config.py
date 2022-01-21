@@ -1,8 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Hashable, Iterable, List, Optional, TypeVar
 import datetime
+from xml.etree.ElementTree import PI
+from numpy import iterable
 import toml
 import cattr.preconf.tomlkit
 import pandas as pd
@@ -16,6 +18,10 @@ _toml_converter = cattr.preconf.tomlkit.make_converter()
 _toml_converter.register_structure_hook(
     pd.Timedelta, lambda v, _: pd.Timedelta(v, CONFIG_TIME_UNIT)
 )
+
+_ALWAYS_READ_COLUMNS = [
+    PicarroColumns.solenoid_valves,
+]
 
 
 @dataclass(frozen=True)
@@ -37,6 +43,7 @@ _VOLUME_UNITS = {
 @dataclass(frozen=True)
 class FluxEstimationConfig:
     method: str
+    columns: List[str]
     t0_delay: pd.Timedelta
     t0_margin: pd.Timedelta
     A: float
@@ -50,9 +57,6 @@ class FluxEstimationConfig:
 class OutputConfig:
     cache_dir: str = ".picarro_cache"
     results_dir: str = "picarro_results"
-    export_columns_extra: List[str] = field(
-        default_factory=lambda: [PicarroColumns.solenoid_valves]
-    )
 
 
 @dataclass(frozen=True)
@@ -60,6 +64,20 @@ class UserConfig:
     measurements: ReadConfig
     flux_estimation: FluxEstimationConfig
     output: OutputConfig = field(default_factory=OutputConfig)
+
+
+HT = TypeVar("HT", bound=Hashable)
+
+
+def _deduplicate(src: Iterable[HT]) -> list[HT]:
+    result = []
+    seen = set()
+    for item in src:
+        if item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+    return result
 
 
 @dataclass(frozen=True)
@@ -85,3 +103,13 @@ class AppConfig:
     @property
     def results_dir_absolute(self) -> Path:
         return self.src_dir / self.user.output.results_dir
+
+    @property
+    def columns_to_read(self) -> list[str]:
+        return _deduplicate(
+            [
+                *self.user.measurements.columns,
+                *self.user.flux_estimation.columns,
+                *_ALWAYS_READ_COLUMNS,
+            ]
+        )

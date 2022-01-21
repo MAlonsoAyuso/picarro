@@ -3,7 +3,17 @@ from dataclasses import dataclass
 import dataclasses
 from os import PathLike
 from pathlib import Path
-from typing import Any, Iterable, Iterator, List, NewType, cast, Union
+from typing import (
+    Any,
+    Iterable,
+    Iterator,
+    List,
+    NewType,
+    Optional,
+    Sequence,
+    cast,
+    Union,
+)
 import pandas as pd
 
 
@@ -183,6 +193,7 @@ def iter_measurements_meta(
 
 def iter_measurements(
     measurement_metas: Iterable[MeasurementMeta],
+    columns: Optional[Sequence[str]] = None,
 ) -> Iterator[Measurement]:
     read_cache = {
         "path": Path(),
@@ -193,6 +204,8 @@ def iter_measurements(
         if chunk_meta.path != read_cache["path"]:
             read_cache["path"] = chunk_meta.path
             read_cache["data"] = read_raw(chunk_meta.path)
+            if columns is not None:
+                read_cache["data"] = read_cache["data"][columns]
 
         data = read_cache["data"]
         return data.loc[chunk_meta.start : chunk_meta.end]

@@ -51,7 +51,9 @@ def iter_measurements_meta(config: AppConfig) -> Iterator[MeasurementMeta]:
 
 
 def iter_measurements(config: AppConfig) -> Iterator[Measurement]:
-    return picarro.read.iter_measurements(iter_measurements_meta(config))
+    return picarro.read.iter_measurements(
+        iter_measurements_meta(config), config.columns_to_read
+    )
 
 
 def iter_measurement_pairs(
@@ -63,7 +65,7 @@ def iter_measurement_pairs(
 
 def iter_analysis_results(config: AppConfig) -> Iterator[AnalysisResult]:
     for measurement_meta, measurement in iter_measurement_pairs(config):
-        for column in config.user.measurements.columns:
+        for column in config.user.flux_estimation.columns:
             yield AnalysisResult(
                 measurement_meta,
                 estimate_flux(config.user.flux_estimation, measurement[column]),
@@ -95,14 +97,10 @@ def claim_outdir(config: AppConfig) -> Path:
 def export_measurements(config: AppConfig):
     outdir = claim_outdir(config) / "measurements"
     outdir.mkdir(exist_ok=True)
-    columns = [
-        *config.user.measurements.columns,
-        *config.user.output.export_columns_extra,
-    ]
     for measurement in iter_measurements(config):
         file_name = measurement.index[0].isoformat().replace(":", "_") + ".csv"
         path = outdir / file_name
-        measurement[columns].to_csv(path)
+        measurement[config.user.measurements.columns].to_csv(path)
 
 
 def _glob_recursive_in_dir(pattern: str, glob_dir: Path) -> list[Path]:

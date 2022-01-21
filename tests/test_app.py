@@ -41,12 +41,13 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
         user=UserConfig(
             ReadConfig(
                 src="data-dir/**/*.dat",
-                columns=["N2O", "CH4"],
+                columns=["CH4", "CO2", "DATE"],
                 max_gap=pd.Timedelta(5, "s"),
                 min_length=pd.Timedelta(1080, "s"),
                 max_length=None,
             ),
             FluxEstimationConfig(
+                columns=["N2O", "CH4"],
                 method="linear",
                 t0_delay=pd.Timedelta(480, "s"),
                 t0_margin=pd.Timedelta(120, "s"),
@@ -119,7 +120,9 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         # Test analysis
         analysis_results = list(picarro.app.iter_analysis_results(app_config))
         expected_analysis_results = list(
-            itertools.product(expected_summaries, app_config.user.measurements.columns)
+            itertools.product(
+                expected_summaries, app_config.user.flux_estimation.columns
+            )
         )
         seen_analysis_results = [
             (summarize_measurement(ar.measurement_meta), ar.estimator.column)
@@ -145,10 +148,5 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         assert len(paths) == len(expected_summaries)
         for path, summary in zip(sorted(paths), expected_summaries):
             data = pd.read_csv(path, index_col="EPOCH_TIME")
-            assert list(data.columns) == [
-                *app_config.user.measurements.columns,
-                *app_config.user.output.export_columns_extra,
-            ]
+            assert list(data.columns) == app_config.user.measurements.columns
             assert len(data) == summary["length"]
-            (valve,) = data[PicarroColumns.solenoid_valves].unique()
-            assert valve == summary["solenoid_valve"]
