@@ -31,8 +31,8 @@ class ReadConfig:
     src: str  # path or glob
     columns: List[str]
     max_gap: pd.Timedelta = pd.Timedelta(10, "s")
-    min_length: Optional[pd.Timedelta] = None
-    max_length: Optional[pd.Timedelta] = None
+    min_duration: Optional[pd.Timedelta] = None
+    max_duration: Optional[pd.Timedelta] = None
 
 
 _VOLUME_UNITS = {

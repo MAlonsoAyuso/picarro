@@ -42,12 +42,12 @@ def iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:
     )
 
     for measurement_meta in measurement_metas:
-        length = measurement_meta.end - measurement_meta.start  # type: ignore
-        min_length = config.user.measurements.min_length
-        max_length = config.user.measurements.max_length
-        if min_length and length < min_length:
+        duration = measurement_meta.end - measurement_meta.start  # type: ignore
+        min_duration = config.user.measurements.min_duration
+        max_duration = config.user.measurements.max_duration
+        if min_duration and duration < min_duration:
             continue
-        if max_length and max_length < length:
+        if max_duration and max_duration < duration:
             continue
         yield measurement_meta
 

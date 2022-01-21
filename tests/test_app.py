@@ -42,8 +42,8 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
                 src="data-dir/**/*.dat",
                 columns=["CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
                 max_gap=pd.Timedelta(5, "s"),
-                min_length=pd.Timedelta(1080, "s"),
-                max_length=None,
+                min_duration=pd.Timedelta(1080, "s"),
+                max_duration=None,
             ),
             FluxEstimationConfig(
                 columns=["N2O", "CH4"],
