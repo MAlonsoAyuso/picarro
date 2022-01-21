@@ -6,7 +6,7 @@ import itertools
 import os
 from pathlib import Path
 from typing import Any, Iterator, List
-from picarro.analyze import FluxEstimator
+from picarro.analyze import FluxEstimator, estimate_flux
 from picarro.config import AppConfig
 import picarro.read
 from picarro.read import Measurement, MeasurementMeta, ChunkMeta
@@ -24,7 +24,7 @@ _CHUNKS_META_DIR = "chunks"
 
 @dataclass
 class AnalysisResult:
-    measurement: MeasurementMeta
+    measurement_meta: MeasurementMeta
     estimator: FluxEstimator
 
 
@@ -56,8 +56,23 @@ def iter_measurements_meta(config: AppConfig) -> Iterator[MeasurementMeta]:
 
 
 def iter_measurements(config: AppConfig) -> Iterator[Measurement]:
-    measurements_meta = iter_measurements_meta(config)
-    return picarro.read.iter_measurements(measurements_meta)
+    return picarro.read.iter_measurements(iter_measurements_meta(config))
+
+
+def iter_measurement_pairs(
+    config: AppConfig,
+) -> Iterator[tuple[MeasurementMeta, Measurement]]:
+    mms_1, mms_2 = itertools.tee(iter_measurements_meta(config))
+    return zip(mms_1, picarro.read.iter_measurements(mms_2))
+
+
+def iter_analysis_results(config: AppConfig) -> Iterator[AnalysisResult]:
+    for measurement_meta, measurement in iter_measurement_pairs(config):
+        for column in config.user.measurements.columns:
+            yield AnalysisResult(
+                measurement_meta,
+                estimate_flux(config.user.flux_estimation, measurement[column]),
+            )
 
 
 def _glob_recursive_in_dir(pattern: str, glob_dir: Path) -> list[Path]:

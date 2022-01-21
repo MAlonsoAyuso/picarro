@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import shutil
+from importlib_metadata import itertools
 import pytest
 import picarro.app
 from picarro.config import (
@@ -11,12 +12,16 @@ from picarro.config import (
     OutputConfig,
 )
 from picarro.read import MeasurementMeta, PicarroColumns
-
+import numpy as np
 
 config_example_src = Path(__file__).absolute().parent / "config_example.toml"
 assert config_example_src.exists()
 
 _EXAMPLE_DATA_DIR = Path(__file__).parent.parent / "example_data"
+
+
+def abs_rel_diff(a, b):
+    return np.abs((a - b) / b)
 
 
 @pytest.fixture
@@ -78,6 +83,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     def summarize_measurement(mm: MeasurementMeta):
         return dict(solenoid_valve=mm.solenoid_valve, length=mm.length)
 
+    # Check that measurement metadata objects are as expected
     measurement_summaries = [
         summarize_measurement(mm)
         for mm in picarro.app.iter_measurements_meta(app_config)
@@ -85,6 +91,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
 
     assert measurement_summaries == expected_summaries
 
+    # Check that measurement datasets are as expected
     data_summaries = [
         dict(
             solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
@@ -94,3 +101,17 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     ]
 
     assert data_summaries == expected_summaries
+
+    # Test analysis
+    analysis_results = list(picarro.app.iter_analysis_results(app_config))
+
+    expected_analysis_results = list(
+        itertools.product(expected_summaries, app_config.user.measurements.columns)
+    )
+
+    seen_analysis_results = [
+        (summarize_measurement(ar.measurement_meta), ar.estimator.column)
+        for ar in analysis_results
+    ]
+
+    assert expected_analysis_results == seen_analysis_results
