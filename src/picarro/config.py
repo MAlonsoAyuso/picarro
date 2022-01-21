@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 import toml
 import cattr.preconf.tomlkit
 
@@ -18,14 +18,23 @@ class ReadConfig:
     max_length: Optional[int] = None
 
 
+_VOLUME_UNITS = {
+    "N2O": 1e-6,
+    "CH4": 1e-6,
+    "CO2": 1e-6,
+}
+
+
 @dataclass(frozen=True)
-class FitConfig:
+class FluxEstimationConfig:
     method: str
-    t0: int
+    t0_delay: int
     t0_margin: int
     A: float
     Q: float
     V: float
+    skip_end: int = 0
+    volume_prefixes: Dict[str, float] = field(default_factory=_VOLUME_UNITS.copy)
 
 
 @dataclass(frozen=True)
@@ -37,7 +46,7 @@ class OutputConfig:
 @dataclass(frozen=True)
 class UserConfig:
     measurements: ReadConfig
-    fit: FitConfig
+    flux_estimation: FluxEstimationConfig
     output: OutputConfig = field(default_factory=OutputConfig)
 
 

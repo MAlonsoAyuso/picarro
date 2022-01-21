@@ -5,9 +5,9 @@ max_gap = 5
 min_length = 1080 # 18 minutes
 # max_length = 1320 # 22 minutes
 
-[fit]
+[flux_estimation]
 method = "linear"
-t0 = 480
+t0_delay = 480
 t0_margin = 120
 A = 0.25
 Q = 4.16e-6

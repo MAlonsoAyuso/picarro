@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 import pytest
 import picarro.app
-from picarro.config import AppConfig, UserConfig, ReadConfig, FitConfig, OutputConfig
+from picarro.config import AppConfig, UserConfig, ReadConfig, FluxEstimationConfig, OutputConfig
 from picarro.read import MeasurementMeta, PicarroColumns
 
 
@@ -32,9 +32,9 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
                 min_length=1080,
                 max_length=None,
             ),
-            FitConfig(
+            FluxEstimationConfig(
                 method="linear",
-                t0=480,
+                t0_delay=480,
                 t0_margin=120,
                 A=0.25,
                 Q=4.16e-6,

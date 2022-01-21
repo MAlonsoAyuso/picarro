@@ -5,8 +5,8 @@ from hashlib import sha256
 import itertools
 import os
 from pathlib import Path
-from typing import Any, Iterator, List, Union
-from picarro.analyze import ExponentialFit, LinearFit
+from typing import Any, Iterator, List
+from picarro.analyze import FluxEstimator
 from picarro.config import AppConfig
 import picarro.read
 from picarro.read import Measurement, MeasurementMeta, ChunkMeta
@@ -25,7 +25,7 @@ _CHUNKS_META_DIR = "chunks"
 @dataclass
 class AnalysisResult:
     measurement: MeasurementMeta
-    fit: Union[LinearFit, ExponentialFit]
+    estimator: FluxEstimator
 
 
 def iter_measurements_meta(config: AppConfig) -> Iterator[MeasurementMeta]:

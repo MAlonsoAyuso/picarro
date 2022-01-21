@@ -3,7 +3,7 @@ import importlib.resources as resources
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import pandas as pd
-from picarro.analyze import ExponentialFit
+from picarro.analyze import ExponentialEstimator
 from picarro.read import CONC_UNITS
 
 with resources.path("picarro.resources", "matplotlib-style") as path:
@@ -55,7 +55,7 @@ def plot_measurement(data, columns, linear_fits=None, exponential_fits=None):
             )
 
         if col in exponential_fits:
-            exponential_fit: ExponentialFit = exponential_fits[col]
+            exponential_fit: ExponentialEstimator = exponential_fits[col]
             times = pd.date_range(
                 start=exponential_fit.start_time,
                 end=exponential_fit.end_time,

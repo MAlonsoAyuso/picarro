@@ -1,12 +1,9 @@
-from unittest.case import skip
-import pandas as pd
+from re import A
 import pytest
+import pandas as pd
+from picarro.config import FluxEstimationConfig
 from picarro.read import read_raw, PicarroColumns
-from picarro.analyze import (
-    estimate_vol_flux_exponential,
-    fit_line,
-    estimate_vol_flux,
-)
+from picarro.analyze import estimate_flux
 import pathlib
 import numpy as np
 
@@ -21,9 +18,30 @@ def abs_rel_diff(a, b):
     return np.abs((a - b) / b)
 
 
-def test_N2O_slope_right_order_of_magnitude():
+common_params = dict(
+    t0_delay=8 * 60,  # s
+    t0_margin=2 * 60,  # s
+    A=0.25,  # m2
+    Q=0.25 * 1e-3 / 60,  # m3/s
+    V=50e-3,  # m3
+)
+
+linear_config = FluxEstimationConfig(
+    method="linear",
+    **common_params,  # type: ignore
+)
+
+exponential_config = FluxEstimationConfig(
+    method="exponential",
+    **common_params,  # type: ignore
+)
+
+
+def test_linear_N2O_slope_right_order_of_magnitude():
+    # This test will catch any serious errors in order of magnitude etc
     measurement = read_raw(data_path("example_measurement.dat"))[PicarroColumns.N2O]
-    linear_fit = fit_line(measurement, skip_start=60 * 10)
+    linear_estimator = estimate_flux(linear_config, measurement)
+    linear_fit = linear_estimator.fit_params
     assert abs_rel_diff(linear_fit.slope, 1.44e-4) < 0.01  # 1.44 * 10^(-4) ppmv / s
 
 
@@ -32,17 +50,17 @@ def test_fit_line_approximates_values():
     # if the values do not fit.
     measurement = read_raw(data_path("example_measurement.dat"))[PicarroColumns.CO2]
 
-    linear_fit = fit_line(measurement, skip_start=60 * 10)
+    estimator = estimate_flux(linear_config, measurement)
 
     assert isinstance(measurement.index, pd.DatetimeIndex)
     times = measurement.index
     times_in_regression = times[
-        (times >= linear_fit.start_time) & (times <= linear_fit.end_time)
+        (times >= estimator.moments.fit_start) & (times <= estimator.moments.fit_end)
     ]
     num_points_to_predict = len(times_in_regression)
     assert num_points_to_predict == 741
 
-    predictions = linear_fit.predict(times_in_regression)
+    predictions = estimator.predict(times_in_regression)
     rel_diff = ((predictions - measurement) / measurement).dropna()
 
     assert len(rel_diff) == num_points_to_predict
@@ -59,62 +77,31 @@ def test_fit_line_approximates_values():
 
 
 def test_estimate_N2O_vol_flux_right_order_of_magnitude():
-    t0 = 8 * 60  # s
-    skip_extra = 2 * 60  # s
-    skip_start = t0 + skip_extra
     measurement = read_raw(data_path("example_measurement.dat"))[PicarroColumns.N2O]
-    A = 0.25  # m2
-    V = 50e-3  # m3
-    Q = 0.25 * 1e-3 / 60  # m3/s
-    h = V / A  # m
-    tau = V / Q  # s
-    t0 = 8 * 60
-    ppm = 1e-6
-    vol_flux = estimate_vol_flux(
-        measurement,
-        t0=t0,
-        skip_start=skip_start,
-        h=h,  # m
-        tau=tau,  # s
-        conc_unit_prefix=ppm,
-    )
+    estimator = estimate_flux(linear_config, measurement)
+    vol_flux = estimator.estimate_vol_flux()
 
     slope = 1.44022e-4  # ppmv / s
-    total_measurement_time = (
-        measurement.index[-1] - measurement.index[0]
-    ).total_seconds()
+    moments = estimator.moments
+    total_measurement_time = (moments.data_end - moments.data_start).total_seconds()
     elapsed_time_at_mid_of_fit = (
-        skip_start - t0 + (total_measurement_time - skip_start) / 2
-    )
+        moments.fit_start + (moments.fit_end - moments.fit_start) / 2 - moments.t0
+    ).total_seconds()
+    tau = linear_config.V / linear_config.Q
+    h = linear_config.V / linear_config.A
+    ppm = 1e-6
     correction_factor = np.exp(elapsed_time_at_mid_of_fit / tau)
     expected_result = h * slope * correction_factor * ppm
+
     assert abs_rel_diff(vol_flux, expected_result) < 0.001  # m/s
 
 
 def test_estimate_N2O_vol_flux_linear_and_exponential_agree():
-    t0 = 8 * 60  # s
-    skip_extra = 2 * 60  # s
     measurement = read_raw(data_path("example_measurement.dat"))[PicarroColumns.N2O]
-    A = 0.25  # m2
-    V = 50e-3  # m3
-    Q = 0.25 * 1e-3 / 60  # m3/s
-    h = V / A  # m
-    tau = V / Q  # s
-    ppm = 1e-6
-    vol_flux_linear = estimate_vol_flux(
-        measurement,
-        t0=t0,
-        skip_start=t0 + skip_extra,
-        h=h,  # m
-        tau=tau,  # s
-        conc_unit_prefix=ppm,
-    )
-    vol_flux_exponential = estimate_vol_flux_exponential(
-        measurement,
-        t0=t0,
-        skip_start=t0 + skip_extra,
-        h=h,  # m
-        tau=tau,  # s
-        conc_unit_prefix=ppm,
-    )
+    linear_estimator = estimate_flux(linear_config, measurement)
+    exponential_estimator = estimate_flux(exponential_config, measurement)
+
+    vol_flux_linear = linear_estimator.estimate_vol_flux()
+    vol_flux_exponential = exponential_estimator.estimate_vol_flux()
+
     assert abs_rel_diff(vol_flux_linear, vol_flux_exponential) < 0.001  # m/s
