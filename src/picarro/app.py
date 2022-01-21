@@ -1,12 +1,15 @@
 from __future__ import annotations
+from dataclasses import dataclass
 import glob
 from hashlib import sha256
 import itertools
 import os
 from pathlib import Path
-from typing import Any, Iterator, List
+from typing import Any, Iterator, List, Union
+from picarro.analyze import ExponentialFit, LinearFit
 from picarro.config import AppConfig
 import picarro.read
+from picarro.read import Measurement, MeasurementMeta, ChunkMeta
 import pandas as pd
 import json
 import cattr.preconf.json
@@ -19,7 +22,13 @@ _CONFIG_TIME_UNIT = "s"
 _CHUNKS_META_DIR = "chunks"
 
 
-def iter_measurements_meta(config: AppConfig) -> Iterator[picarro.read.MeasurementMeta]:
+@dataclass
+class AnalysisResult:
+    measurement: MeasurementMeta
+    fit: Union[LinearFit, ExponentialFit]
+
+
+def iter_measurements_meta(config: AppConfig) -> Iterator[MeasurementMeta]:
     file_paths = _glob_recursive_in_dir(config.user.measurements.src, config.src_dir)
     for path in file_paths:
         _create_chunks_meta(config, path)
@@ -32,7 +41,7 @@ def iter_measurements_meta(config: AppConfig) -> Iterator[picarro.read.Measureme
     )
 
 
-def iter_measurements(config: AppConfig) -> Iterator[picarro.read.Measurement]:
+def iter_measurements(config: AppConfig) -> Iterator[Measurement]:
     measurements_meta = iter_measurements_meta(config)
     return picarro.read.iter_measurements(measurements_meta)
 
@@ -55,13 +64,11 @@ def _create_chunks_meta(config: AppConfig, data_file_path: Path):
     _save_json(_json_converter.unstructure(chunks_meta), meta_path)
 
 
-def _load_chunks_meta(
-    config: AppConfig, data_file_path: Path
-) -> list[picarro.read.ChunkMeta]:
+def _load_chunks_meta(config: AppConfig, data_file_path: Path) -> list[ChunkMeta]:
     assert data_file_path.is_absolute(), data_file_path
     meta_path = _get_chunks_meta_path(config, data_file_path)
     data = _load_json(meta_path)
-    return _json_converter.structure(data, List[picarro.read.ChunkMeta])
+    return _json_converter.structure(data, List[ChunkMeta])
 
 
 def _get_chunks_meta_path(config: AppConfig, data_file_path: Path) -> Path:

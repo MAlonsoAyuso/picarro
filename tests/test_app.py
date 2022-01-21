@@ -4,7 +4,7 @@ import shutil
 import pytest
 import picarro.app
 from picarro.config import AppConfig, UserConfig, ReadConfig, FitConfig, OutputConfig
-from picarro.read import Measurement, MeasurementMeta, PicarroColumns
+from picarro.read import MeasurementMeta, PicarroColumns
 
 
 config_example_src = Path(__file__).absolute().parent / "config_example.toml"
