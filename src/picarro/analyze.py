@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import scipy.stats
 from picarro.config import FluxEstimationConfig
+from picarro.read import MeasurementMeta
 
 VolumetricFlux = float
 
@@ -177,12 +178,18 @@ def calculate_elapsed_seconds(
 
 FluxEstimator = Union[LinearEstimator, ExponentialEstimator]
 
-_ESTIMATORS: Mapping[str, Type[FluxEstimator]] = {
+ESTIMATORS: Mapping[str, Type[FluxEstimator]] = {
     "linear": LinearEstimator,
     "exponential": ExponentialEstimator,
 }
 
 
+@dataclass
+class AnalysisResult:
+    measurement_meta: MeasurementMeta
+    estimator: FluxEstimator
+
+
 def estimate_flux(config: FluxEstimationConfig, data: TimeSeries) -> FluxEstimator:
-    cls = _ESTIMATORS[config.method]
+    cls = ESTIMATORS[config.method]
     return cls.create(data, config)

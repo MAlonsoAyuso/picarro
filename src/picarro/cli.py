@@ -32,3 +32,10 @@ def export_fluxes(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, picarro.config.AppConfig), config
     picarro.app.export_fluxes(config)
+
+@cli.command()
+@click.pass_context
+def plot_fluxes(ctx: click.Context):
+    config = ctx.obj["config"]
+    assert isinstance(config, picarro.config.AppConfig), config
+    picarro.app.plot_fluxes(config)

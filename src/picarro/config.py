@@ -88,6 +88,7 @@ class AppPaths:
     out_marker: Path
     out_measurements: Path
     out_fluxes: Path
+    out_plot_fluxes: Path
 
     def cache_chunk_meta(self, data_file_path: Path) -> Path:
         assert data_file_path.is_absolute(), data_file_path
@@ -99,6 +100,7 @@ class AppPaths:
         assert base_dir.is_absolute()
         out = base_dir / out_dir
         cache = out / "cache"
+        out_plot = out / "plot"
         return AppPaths(
             base=base_dir,
             cache_chunks=cache / "chunks",
@@ -106,6 +108,7 @@ class AppPaths:
             out_marker=out / ".picarro",
             out_measurements=out / "measurements",
             out_fluxes=out / "fluxes.csv",
+            out_plot_fluxes=out_plot / "fluxes",
         )
 
 

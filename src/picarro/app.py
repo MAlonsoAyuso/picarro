@@ -1,14 +1,13 @@
 from __future__ import annotations
-from dataclasses import dataclass
 import glob
 import itertools
 import os
 from pathlib import Path
-from re import M
-from typing import Any, Callable, Iterator, List
-from picarro.analyze import FluxEstimator, estimate_flux
+from typing import Any, Iterator, List
+from picarro.analyze import AnalysisResult, estimate_flux
 from picarro.config import AppConfig
 import picarro.read
+import picarro.plot
 from picarro.read import Measurement, MeasurementMeta, ChunkMeta
 import pandas as pd
 import json
@@ -19,12 +18,6 @@ _json_converter.register_unstructure_hook(Path, str)
 _json_converter.register_structure_hook(Path, lambda v, _: Path(v))
 _json_converter.register_unstructure_hook(pd.Timestamp, str)
 _json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
-
-
-@dataclass
-class AnalysisResult:
-    measurement_meta: MeasurementMeta
-    estimator: FluxEstimator
 
 
 def iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:
@@ -94,11 +87,15 @@ def claim_outdir(config: AppConfig):
     marker_file_path.touch()
 
 
+def _build_measurement_filename_stem(measurement: Measurement) -> str:
+    return measurement.index[0].isoformat().replace(":", "_")
+
+
 def export_measurements(config: AppConfig):
     claim_outdir(config)
     config.paths.out_measurements.mkdir(exist_ok=True)
     for measurement in iter_measurements(config):
-        file_name = measurement.index[0].isoformat().replace(":", "_") + ".csv"
+        file_name = _build_measurement_filename_stem(measurement) + ".csv"
         path = config.paths.out_measurements / file_name
         measurement[config.user.measurements.columns].to_csv(path)
 
@@ -126,6 +123,19 @@ def export_fluxes(config: AppConfig):
     config.paths.out_measurements.mkdir(exist_ok=True)
     data = get_fluxes_dataframe(config)
     data.to_csv(config.paths.out_fluxes, index=False)
+
+
+def plot_fluxes(config: AppConfig):
+    claim_outdir(config)
+    analysis_results = list(iter_analysis_results(config))
+    for measurement in iter_measurements(config):
+        fig = picarro.plot.plot_measurement(
+            measurement, config.user.flux_estimation.columns, analysis_results
+        )
+        file_name = _build_measurement_filename_stem(measurement) + ".png"
+        path = config.paths.out_plot_fluxes / file_name
+        path.parent.mkdir(exist_ok=True, parents=True)
+        fig.savefig(path)
 
 
 def _glob_recursive_in_dir(pattern: str, glob_dir: Path) -> list[Path]:
