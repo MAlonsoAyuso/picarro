@@ -2,20 +2,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
+import datetime
 import toml
 import cattr.preconf.tomlkit
+import pandas as pd
+
+CONFIG_TIME_UNIT = "s"
 
 
 _toml_converter = cattr.preconf.tomlkit.make_converter()
+_toml_converter.register_structure_hook(
+    pd.Timedelta, lambda v, _: pd.Timedelta(v, CONFIG_TIME_UNIT)
+)
 
 
 @dataclass(frozen=True)
 class ReadConfig:
     src: str
     columns: List[str]
-    max_gap: int = 10
-    min_length: Optional[int] = None
-    max_length: Optional[int] = None
+    max_gap: pd.Timedelta = pd.Timedelta(10, "s")
+    min_length: Optional[pd.Timedelta] = None
+    max_length: Optional[pd.Timedelta] = None
 
 
 _VOLUME_UNITS = {
@@ -28,12 +35,12 @@ _VOLUME_UNITS = {
 @dataclass(frozen=True)
 class FluxEstimationConfig:
     method: str
-    t0_delay: int
-    t0_margin: int
+    t0_delay: pd.Timedelta
+    t0_margin: pd.Timedelta
     A: float
     Q: float
     V: float
-    skip_end: int = 0
+    skip_end: pd.Timedelta = pd.Timedelta(0)
     volume_prefixes: Dict[str, float] = field(default_factory=_VOLUME_UNITS.copy)
 
 

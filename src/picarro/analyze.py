@@ -96,9 +96,9 @@ class _FluxEstimatorBase:
             raise ValueError(f"Empty dataset {data}")
         data_start = data.index[0]
         data_end = data.index[-1]
-        t0 = data_start + datetime.timedelta(seconds=config.t0_delay)
-        fit_start_limit = t0 + datetime.timedelta(seconds=config.t0_margin)
-        fit_end_limit = data_end - datetime.timedelta(seconds=config.skip_end)
+        t0 = data_start + config.t0_delay
+        fit_start_limit = t0 + config.t0_margin
+        fit_end_limit = data_end - config.skip_end
 
         fit_index = data.index[
             (data.index >= fit_start_limit) & (data.index <= fit_end_limit)

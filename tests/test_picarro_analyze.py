@@ -19,8 +19,8 @@ def abs_rel_diff(a, b):
 
 
 common_params = dict(
-    t0_delay=8 * 60,  # s
-    t0_margin=2 * 60,  # s
+    t0_delay=pd.Timedelta(8 * 60, "s"),
+    t0_margin=pd.Timedelta(2 * 60, "s"),
     A=0.25,  # m2
     Q=0.25 * 1e-3 / 60,  # m3/s
     V=50e-3,  # m3

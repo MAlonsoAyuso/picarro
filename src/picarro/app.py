@@ -18,7 +18,6 @@ _json_converter = cattr.preconf.json.make_converter()
 _json_converter.register_unstructure_hook(pd.Timestamp, str)
 _json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
 
-_CONFIG_TIME_UNIT = "s"
 _CHUNKS_META_DIR = "chunks"
 
 
@@ -37,20 +36,16 @@ def iter_measurements_meta(config: AppConfig) -> Iterator[MeasurementMeta]:
 
     measurement_metas = picarro.read.iter_measurements_meta(
         itertools.chain(*chunks_meta),
-        pd.Timedelta(config.user.measurements.max_gap, _CONFIG_TIME_UNIT),
+        config.user.measurements.max_gap,
     )
 
     for measurement_meta in measurement_metas:
         length = measurement_meta.end - measurement_meta.start  # type: ignore
-        min_length = pd.Timedelta(
-            config.user.measurements.min_length, _CONFIG_TIME_UNIT
-        )
-        max_length = pd.Timedelta(
-            config.user.measurements.max_length, _CONFIG_TIME_UNIT
-        )
-        if length < min_length:
+        min_length = config.user.measurements.min_length
+        max_length = config.user.measurements.max_length
+        if min_length and length < min_length:
             continue
-        if max_length < length:
+        if max_length and max_length < length:
             continue
         yield measurement_meta
 

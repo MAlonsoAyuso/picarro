@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import shutil
-from importlib_metadata import itertools
+import itertools
 import pytest
 import picarro.app
 from picarro.config import (
@@ -13,6 +13,7 @@ from picarro.config import (
 )
 from picarro.read import MeasurementMeta, PicarroColumns
 import numpy as np
+import pandas as pd
 
 config_example_src = Path(__file__).absolute().parent / "config_example.toml"
 assert config_example_src.exists()
@@ -39,14 +40,14 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
             ReadConfig(
                 src="data-dir/**/*.dat",
                 columns=["N2O", "CH4"],
-                max_gap=5,
-                min_length=1080,
+                max_gap=pd.Timedelta(5, "s"),
+                min_length=pd.Timedelta(1080, "s"),
                 max_length=None,
             ),
             FluxEstimationConfig(
                 method="linear",
-                t0_delay=480,
-                t0_margin=120,
+                t0_delay=pd.Timedelta(480, "s"),
+                t0_margin=pd.Timedelta(120, "s"),
                 A=0.25,
                 Q=4.16e-6,
                 V=50e-3,
