@@ -4,6 +4,7 @@ import glob
 import itertools
 import os
 from pathlib import Path
+from re import M
 from typing import Any, Callable, Iterator, List
 from picarro.analyze import FluxEstimator, estimate_flux
 from picarro.config import AppConfig
@@ -100,6 +101,31 @@ def export_measurements(config: AppConfig):
         file_name = measurement.index[0].isoformat().replace(":", "_") + ".csv"
         path = config.paths.out_measurements / file_name
         measurement[config.user.measurements.columns].to_csv(path)
+
+
+def get_fluxes_dataframe(config: AppConfig) -> pd.DataFrame:
+    def make_row(analysis_result: AnalysisResult):
+        return pd.Series(
+            dict(
+                start_utc=analysis_result.measurement_meta.start,
+                end_utc=analysis_result.measurement_meta.end,
+                solenoid_valve=analysis_result.measurement_meta.solenoid_valve,
+                column=analysis_result.estimator.column,
+                vol_flux=analysis_result.estimator.estimate_vol_flux(),
+                n_samples_total=analysis_result.measurement_meta.n_samples,
+                n_samples_flux_estimate=analysis_result.estimator.n_samples,
+            )
+        )
+
+    rows = list(map(make_row, iter_analysis_results(config)))
+    return pd.DataFrame(rows)
+
+
+def export_fluxes(config: AppConfig):
+    claim_outdir(config)
+    config.paths.out_measurements.mkdir(exist_ok=True)
+    data = get_fluxes_dataframe(config)
+    data.to_csv(config.paths.out_fluxes, index=False)
 
 
 def _glob_recursive_in_dir(pattern: str, glob_dir: Path) -> list[Path]:

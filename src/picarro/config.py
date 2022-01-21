@@ -88,6 +88,7 @@ class AppPaths:
     out: Path
     out_marker: Path
     out_measurements: Path
+    out_fluxes: Path
 
     def cache_chunk_meta(self, data_file_path: Path) -> Path:
         assert data_file_path.is_absolute(), data_file_path
@@ -105,6 +106,7 @@ class AppPaths:
             out=out,
             out_marker=out / ".picarro",
             out_measurements=out / "measurements",
+            out_fluxes=out / "fluxes.csv",
         )
 
 

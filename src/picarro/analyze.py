@@ -35,6 +35,7 @@ class _FluxEstimatorBase:
     column: str
     fit_params: LinearFit
     moments: Moments
+    n_samples: int
 
     @staticmethod
     def transform_time(
@@ -66,18 +67,18 @@ class _FluxEstimatorBase:
                 f"missing column {column} in volume_prefixes {config.volume_prefixes}"
             )
         assert isinstance(column, str)
-        fit_params, moments = cls._fit(data, config)
+        fit_params, moments, n_samples = cls._fit(data, config)
         assert isinstance(data.index, pd.DatetimeIndex)
-        return cls(config, column, fit_params, moments)
+        return cls(config, column, fit_params, moments, n_samples)
 
     @classmethod
     def _fit(
         cls, data: TimeSeries, config: FluxEstimationConfig
-    ) -> tuple[LinearFit, Moments]:
+    ) -> tuple[LinearFit, Moments, int]:
         moments = cls._determine_moments(data, config)
         data_to_fit = data[moments.fit_start : moments.fit_end]
         assert isinstance(data_to_fit.index, pd.DatetimeIndex)
-        assert len(data), (data, moments)
+        assert len(data_to_fit), (data, moments)
         x = cls.transform_time(data_to_fit.index, config, moments)
         y = data_to_fit.to_numpy()
         result = scipy.stats.linregress(x, y)
@@ -87,7 +88,7 @@ class _FluxEstimatorBase:
             intercept_stderr=result.intercept_stderr,  # type: ignore
             slope_stderr=result.stderr,  # type: ignore
         )
-        return fit_params, moments
+        return fit_params, moments, len(data_to_fit)
 
     @staticmethod
     def _determine_moments(data: TimeSeries, config: FluxEstimationConfig) -> Moments:

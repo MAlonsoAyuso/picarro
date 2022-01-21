@@ -84,7 +84,7 @@ class ChunkMeta:
     start: pd.Timestamp
     end: pd.Timestamp
     solenoid_valve: int
-    length: int
+    n_samples: int
 
 
 @dataclass
@@ -93,7 +93,7 @@ class MeasurementMeta:
     start: pd.Timestamp
     end: pd.Timestamp
     solenoid_valve: int
-    length: int
+    n_samples: int
 
     @staticmethod
     def from_chunk_metas(chunk_metas: List[ChunkMeta]) -> MeasurementMeta:
@@ -105,7 +105,7 @@ class MeasurementMeta:
             chunk_metas[0].start,
             chunk_metas[-1].end,
             solenoid_valve,
-            sum(c.length for c in chunk_metas),
+            sum(c.n_samples for c in chunk_metas),
         )
 
 

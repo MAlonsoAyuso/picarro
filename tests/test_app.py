@@ -66,7 +66,7 @@ def call_immediately(func: Callable[[], None]) -> None:
 
 
 def summarize_measurement(mm: MeasurementMeta):
-    return dict(solenoid_valve=mm.solenoid_valve, length=mm.length)
+    return dict(solenoid_valve=mm.solenoid_valve, n_samples=mm.n_samples)
 
 
 def test_integrated(app_config: AppConfig, tmp_path: Path):
@@ -88,13 +88,13 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     # These were established by manually sifting through the files
     expected_summaries = [
         # one removed here compared to the full set, because it's too short
-        dict(solenoid_valve=14, length=1789),
-        dict(solenoid_valve=15, length=1787),
-        dict(solenoid_valve=1, length=1779),
-        dict(solenoid_valve=2, length=1782),
-        dict(solenoid_valve=3, length=1789),
-        dict(solenoid_valve=4, length=1786),
-        dict(solenoid_valve=5, length=1783),
+        dict(solenoid_valve=14, n_samples=1789),
+        dict(solenoid_valve=15, n_samples=1787),
+        dict(solenoid_valve=1, n_samples=1779),
+        dict(solenoid_valve=2, n_samples=1782),
+        dict(solenoid_valve=3, n_samples=1789),
+        dict(solenoid_valve=4, n_samples=1786),
+        dict(solenoid_valve=5, n_samples=1783),
         # one removed here compared to the full set, because it's too short
     ]
 
@@ -114,7 +114,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         data_summaries = [
             dict(
                 solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
-                length=len(m),
+                n_samples=len(m),
             )
             for m in picarro.app.iter_measurements(app_config)
         ]
@@ -145,5 +145,5 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         for path, summary in zip(sorted(paths), expected_summaries):
             data = pd.read_csv(path, index_col="datetime_utc")
             assert list(data.columns) == app_config.user.measurements.columns
-            assert len(data) == summary["length"]
+            assert len(data) == summary["n_samples"]
             assert str(data[PicarroColumns.solenoid_valves].dtype).startswith("int")

@@ -24,3 +24,11 @@ def export_measurements(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, picarro.config.AppConfig), config
     picarro.app.export_measurements(config)
+
+
+@cli.command()
+@click.pass_context
+def export_fluxes(ctx: click.Context):
+    config = ctx.obj["config"]
+    assert isinstance(config, picarro.config.AppConfig), config
+    picarro.app.export_fluxes(config)

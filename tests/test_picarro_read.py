@@ -45,21 +45,21 @@ def test_chunk_metadata_is_correct():
             start=pd.Timestamp("2021-05-07 00:01:15.170"),
             end=pd.Timestamp("2021-05-07 00:02:19.338000"),
             solenoid_valve=5,
-            length=81,
+            n_samples=81,
         ),
         ChunkMeta(
             path=path,
             start=pd.Timestamp("2021-05-07 00:02:21.696"),
             end=pd.Timestamp("2021-05-07 00:22:19.405000"),
             solenoid_valve=6,
-            length=1487,
+            n_samples=1487,
         ),
         ChunkMeta(
             path=path,
             start=pd.Timestamp("2021-05-07 00:22:20.719"),
             end=pd.Timestamp("2021-05-07 00:24:23.092000"),
             solenoid_valve=7,
-            length=152,
+            n_samples=152,
         ),
     ]
 
@@ -82,7 +82,7 @@ def _test_measurements_and_summaries_correct(
     meta_summaries = [
         dict(
             solenoid_valve=mm.solenoid_valve,
-            length=mm.length,
+            n_samples=mm.n_samples,
         )
         for mm in measurement_metas
     ]
@@ -92,7 +92,7 @@ def _test_measurements_and_summaries_correct(
     data_summaries = [
         dict(
             solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
-            length=len(m),
+            n_samples=len(m),
         )
         for m in iter_measurements(measurement_metas)
     ]
@@ -106,15 +106,15 @@ def test_iter_measurement_metas():
 
     # These were established by manually sifting through the files
     expected_summaries = [
-        dict(solenoid_valve=13, length=217),
-        dict(solenoid_valve=14, length=1789),
-        dict(solenoid_valve=15, length=1787),
-        dict(solenoid_valve=1, length=1779),
-        dict(solenoid_valve=2, length=1782),
-        dict(solenoid_valve=3, length=1789),
-        dict(solenoid_valve=4, length=1786),
-        dict(solenoid_valve=5, length=1783),
-        dict(solenoid_valve=6, length=716),
+        dict(solenoid_valve=13, n_samples=217),
+        dict(solenoid_valve=14, n_samples=1789),
+        dict(solenoid_valve=15, n_samples=1787),
+        dict(solenoid_valve=1, n_samples=1779),
+        dict(solenoid_valve=2, n_samples=1782),
+        dict(solenoid_valve=3, n_samples=1789),
+        dict(solenoid_valve=4, n_samples=1786),
+        dict(solenoid_valve=5, n_samples=1783),
+        dict(solenoid_valve=6, n_samples=716),
     ]
 
     _test_measurements_and_summaries_correct(paths, max_gap_s, expected_summaries)
@@ -125,17 +125,17 @@ def test_dont_join_chunks_if_time_gap_is_too_large():
     max_gap_s = 1
     # These were established by manually sifting through the files
     expected_summaries = [
-        dict(solenoid_valve=13, length=217),
-        dict(solenoid_valve=14, length=1789),
-        dict(solenoid_valve=15, length=1787),
-        dict(solenoid_valve=1, length=680),
-        dict(solenoid_valve=1, length=1099),
-        dict(solenoid_valve=2, length=1782),
-        dict(solenoid_valve=3, length=1600),
-        dict(solenoid_valve=3, length=189),
-        dict(solenoid_valve=4, length=1786),
-        dict(solenoid_valve=5, length=1783),
-        dict(solenoid_valve=6, length=716),
+        dict(solenoid_valve=13, n_samples=217),
+        dict(solenoid_valve=14, n_samples=1789),
+        dict(solenoid_valve=15, n_samples=1787),
+        dict(solenoid_valve=1, n_samples=680),
+        dict(solenoid_valve=1, n_samples=1099),
+        dict(solenoid_valve=2, n_samples=1782),
+        dict(solenoid_valve=3, n_samples=1600),
+        dict(solenoid_valve=3, n_samples=189),
+        dict(solenoid_valve=4, n_samples=1786),
+        dict(solenoid_valve=5, n_samples=1783),
+        dict(solenoid_valve=6, n_samples=716),
     ]
 
     _test_measurements_and_summaries_correct(paths, max_gap_s, expected_summaries)
