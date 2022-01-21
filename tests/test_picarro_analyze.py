@@ -24,6 +24,7 @@ common_params = dict(
     A=0.25,  # m2
     Q=0.25 * 1e-3 / 60,  # m3/s
     V=50e-3,  # m3
+    columns=[],  # does not matter here
 )
 
 linear_config = FluxEstimationConfig(
