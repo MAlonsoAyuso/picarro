@@ -99,7 +99,7 @@ class _FluxEstimatorBase:
         data_end = data.index[-1]
         t0 = data_start + config.t0_delay
         fit_start_limit = t0 + config.t0_margin
-        fit_end_limit = data_end - config.skip_end
+        fit_end_limit = data_end
 
         fit_index = data.index[
             (data.index >= fit_start_limit) & (data.index <= fit_end_limit)

@@ -51,7 +51,6 @@ class FluxEstimationConfig:
     A: float
     Q: float
     V: float
-    skip_end: pd.Timedelta = pd.Timedelta(0)
     volume_prefixes: Dict[str, float] = field(default_factory=_VOLUME_UNITS.copy)
 
 
