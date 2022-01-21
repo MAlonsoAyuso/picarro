@@ -20,7 +20,7 @@ _json_converter.register_structure_hook(Path, lambda v, _: Path(v))
 _json_converter.register_unstructure_hook(pd.Timestamp, str)
 _json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
 
-_CHUNKS_META_DIR = "chunks"
+_CHUNK_META_DIR = "chunks"
 
 
 @dataclass
@@ -29,15 +29,17 @@ class AnalysisResult:
     estimator: FluxEstimator
 
 
-def iter_measurements_meta(config: AppConfig) -> Iterator[MeasurementMeta]:
+def iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:
     file_paths = _glob_recursive_in_dir(config.user.measurements.src, config.src_dir)
     for path in file_paths:
-        _create_chunks_meta(config, path)
+        _create_chunk_metas(config, path)
 
-    chunks_meta = (_load_chunks_meta(config, path) for path in file_paths)
+    chunk_metas = itertools.chain(
+        *(_load_chunk_metas(config, path) for path in file_paths)
+    )
 
-    measurement_metas = picarro.read.iter_measurements_meta(
-        itertools.chain(*chunks_meta),
+    measurement_metas = picarro.read.iter_measurement_metas(
+        chunk_metas,
         config.user.measurements.max_gap,
     )
 
@@ -54,14 +56,14 @@ def iter_measurements_meta(config: AppConfig) -> Iterator[MeasurementMeta]:
 
 def iter_measurements(config: AppConfig) -> Iterator[Measurement]:
     return picarro.read.iter_measurements(
-        iter_measurements_meta(config), config.columns_to_read
+        iter_measurement_metas(config), config.columns_to_read
     )
 
 
 def iter_measurement_pairs(
     config: AppConfig,
 ) -> Iterator[tuple[MeasurementMeta, Measurement]]:
-    mms_1, mms_2 = itertools.tee(iter_measurements_meta(config))
+    mms_1, mms_2 = itertools.tee(iter_measurement_metas(config))
     return zip(mms_1, picarro.read.iter_measurements(mms_2))
 
 
@@ -113,26 +115,26 @@ def _glob_recursive_in_dir(pattern: str, glob_dir: Path) -> list[Path]:
     return [glob_dir / r for r in result]
 
 
-def _create_chunks_meta(config: AppConfig, data_file_path: Path):
+def _create_chunk_metas(config: AppConfig, data_file_path: Path):
     assert data_file_path.is_absolute(), data_file_path
-    meta_path = _get_chunks_meta_path(config, data_file_path)
+    meta_path = _get_chunk_meta_path(config, data_file_path)
     if meta_path.exists():
         return
-    chunks_meta, _ = zip(*picarro.read.iter_chunks(data_file_path))
-    _save_json(_json_converter.unstructure(chunks_meta), meta_path)
+    chunk_metas, _ = zip(*picarro.read.iter_chunks(data_file_path))
+    _save_json(_json_converter.unstructure(chunk_metas), meta_path)
 
 
-def _load_chunks_meta(config: AppConfig, data_file_path: Path) -> list[ChunkMeta]:
+def _load_chunk_metas(config: AppConfig, data_file_path: Path) -> list[ChunkMeta]:
     assert data_file_path.is_absolute(), data_file_path
-    meta_path = _get_chunks_meta_path(config, data_file_path)
+    meta_path = _get_chunk_meta_path(config, data_file_path)
     data = _load_json(meta_path)
     return _json_converter.structure(data, List[ChunkMeta])
 
 
-def _get_chunks_meta_path(config: AppConfig, data_file_path: Path) -> Path:
+def _get_chunk_meta_path(config: AppConfig, data_file_path: Path) -> Path:
     assert data_file_path.is_absolute(), data_file_path
     file_name = f"{data_file_path.name}-{_repr_hash(data_file_path)}.json"
-    return config.cache_dir_absolute / _CHUNKS_META_DIR / file_name
+    return config.cache_dir_absolute / _CHUNK_META_DIR / file_name
 
 
 def _repr_hash(obj: Any) -> str:

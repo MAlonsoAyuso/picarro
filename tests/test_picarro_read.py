@@ -3,7 +3,7 @@ import itertools
 import pytest
 from picarro.read import (
     ChunkMeta,
-    iter_measurements_meta,
+    iter_measurement_metas,
     read_raw,
     iter_chunks,
     PicarroColumns,
@@ -39,7 +39,7 @@ def test_chunk_metadata_is_correct():
     path = data_path("example.dat")
 
     # these have been manually verified to be the desired outcome
-    expected_chunks = [
+    expected_chunk_metas = [
         ChunkMeta(
             path=path,
             start=pd.Timestamp("2021-05-07 00:01:15.170"),
@@ -63,8 +63,8 @@ def test_chunk_metadata_is_correct():
         ),
     ]
 
-    chunks_meta, _ = zip(*iter_chunks(path))
-    assert expected_chunks == list(chunks_meta)
+    chunk_metas, _ = zip(*iter_chunks(path))
+    assert expected_chunk_metas == list(chunk_metas)
 
 
 def _test_measurements_and_summaries_correct(
@@ -76,15 +76,15 @@ def _test_measurements_and_summaries_correct(
                 yield chunk_meta
 
     chunk_metas = iter_chunk_metas()
-    measurements_meta = list(
-        iter_measurements_meta(chunk_metas, max_gap=pd.Timedelta(max_gap_s, "s"))
+    measurement_metas = list(
+        iter_measurement_metas(chunk_metas, max_gap=pd.Timedelta(max_gap_s, "s"))
     )
     meta_summaries = [
         dict(
             solenoid_valve=mm.solenoid_valve,
             length=mm.length,
         )
-        for mm in measurements_meta
+        for mm in measurement_metas
     ]
 
     assert meta_summaries == expected_summaries
@@ -94,7 +94,7 @@ def _test_measurements_and_summaries_correct(
             solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
             length=len(m),
         )
-        for m in iter_measurements(measurements_meta)
+        for m in iter_measurements(measurement_metas)
     ]
 
     assert data_summaries == expected_summaries

@@ -96,16 +96,16 @@ class MeasurementMeta:
     length: int
 
     @staticmethod
-    def from_chunks_meta(chunks_meta: List[ChunkMeta]) -> MeasurementMeta:
-        solenoid_valves = {c.solenoid_valve for c in chunks_meta}
+    def from_chunk_metas(chunk_metas: List[ChunkMeta]) -> MeasurementMeta:
+        solenoid_valves = {c.solenoid_valve for c in chunk_metas}
         assert len(solenoid_valves) == 1, solenoid_valves
         (solenoid_valve,) = solenoid_valves
         return MeasurementMeta(
-            chunks_meta,
-            chunks_meta[0].start,
-            chunks_meta[-1].end,
+            chunk_metas,
+            chunk_metas[0].start,
+            chunk_metas[-1].end,
             solenoid_valve,
-            sum(c.length for c in chunks_meta),
+            sum(c.length for c in chunk_metas),
         )
 
 
@@ -167,7 +167,7 @@ def _build_chunk_metadata(chunk: Chunk, path: Path):
     )
 
 
-def iter_measurements_meta(
+def iter_measurement_metas(
     chunks: Iterable[ChunkMeta], max_gap: pd.Timedelta
 ) -> Iterator[MeasurementMeta]:
     chunks = list(chunks)
@@ -193,7 +193,7 @@ def iter_measurements_meta(
                 chunks.insert(0, candidate)
                 break
 
-        yield MeasurementMeta.from_chunks_meta(collected)
+        yield MeasurementMeta.from_chunk_metas(collected)
 
 
 def iter_measurements(
