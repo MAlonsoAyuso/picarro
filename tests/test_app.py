@@ -41,7 +41,7 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
         user=UserConfig(
             ReadConfig(
                 src="data-dir/**/*.dat",
-                columns=["CH4", "CO2", "EPOCH_TIME"],
+                columns=["CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
                 max_gap=pd.Timedelta(5, "s"),
                 min_length=pd.Timedelta(1080, "s"),
                 max_length=None,
@@ -150,3 +150,4 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
             data = pd.read_csv(path, index_col="datetime_utc")
             assert list(data.columns) == app_config.user.measurements.columns
             assert len(data) == summary["length"]
+            assert str(data[PicarroColumns.solenoid_valves].dtype).startswith("int")

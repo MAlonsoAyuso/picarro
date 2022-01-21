@@ -3,17 +3,16 @@ import itertools
 import pytest
 from picarro.read import (
     ChunkMeta,
-    get_chunks_metadata,
     iter_measurements_meta,
     read_raw,
     iter_chunks,
     PicarroColumns,
     iter_measurements,
 )
-import pathlib
+from pathlib import Path
 import pandas as pd
 
-_DATA_DIR = pathlib.Path(__file__).parent.parent / "example_data"
+_DATA_DIR = Path(__file__).parent.parent / "example_data"
 
 
 def data_path(relpath):
@@ -30,8 +29,7 @@ def test_require_unique_timestamps():
 
 
 def test_chunks_have_unique_int_solenoid_valves():
-    d = read_raw(data_path("example.dat"))
-    for chunk in iter_chunks(d):
+    for chunk_meta, chunk in iter_chunks(data_path("example.dat")):
         solenoid_valves = chunk[PicarroColumns.solenoid_valves]
         assert solenoid_valves.dtype == int
         assert len(solenoid_valves.unique()) == 1
@@ -43,21 +41,21 @@ def test_chunk_metadata_is_correct():
     # these have been manually verified to be the desired outcome
     expected_chunks = [
         ChunkMeta(
-            path="example.dat",
+            path=path,
             start=pd.Timestamp("2021-05-07 00:01:15.170"),
             end=pd.Timestamp("2021-05-07 00:02:19.338000"),
             solenoid_valve=5,
             length=81,
         ),
         ChunkMeta(
-            path="example.dat",
+            path=path,
             start=pd.Timestamp("2021-05-07 00:02:21.696"),
             end=pd.Timestamp("2021-05-07 00:22:19.405000"),
             solenoid_valve=6,
             length=1487,
         ),
         ChunkMeta(
-            path="example.dat",
+            path=path,
             start=pd.Timestamp("2021-05-07 00:22:20.719"),
             end=pd.Timestamp("2021-05-07 00:24:23.092000"),
             solenoid_valve=7,
@@ -65,19 +63,21 @@ def test_chunk_metadata_is_correct():
         ),
     ]
 
-    data = read_raw(path)
-    chunks = get_chunks_metadata(data, "example.dat")
-    assert expected_chunks == chunks
+    chunks_meta, _ = zip(*iter_chunks(path))
+    assert expected_chunks == list(chunks_meta)
 
 
 def _test_measurements_and_summaries_correct(
-    paths: list[pathlib.Path], max_gap_s: int, expected_summaries: list[dict]
+    paths: list[Path], max_gap_s: int, expected_summaries: list[dict]
 ):
-    chunks_meta = itertools.chain(
-        *(get_chunks_metadata(read_raw(path), path) for path in paths)
-    )
+    def iter_chunk_metas():
+        for path in paths:
+            for chunk_meta, _ in iter_chunks(path):
+                yield chunk_meta
+
+    chunk_metas = iter_chunk_metas()
     measurements_meta = list(
-        iter_measurements_meta(chunks_meta, max_gap=pd.Timedelta(max_gap_s, "s"))
+        iter_measurements_meta(chunk_metas, max_gap=pd.Timedelta(max_gap_s, "s"))
     )
     meta_summaries = [
         dict(

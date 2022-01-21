@@ -1,4 +1,5 @@
 from __future__ import annotations
+from asyncore import read
 from dataclasses import dataclass
 import dataclasses
 from os import PathLike
@@ -17,6 +18,7 @@ from typing import (
 import pandas as pd
 
 INDEX_NAME = "datetime_utc"
+
 
 class PicarroColumns:
     DATE = "DATE"
@@ -76,9 +78,9 @@ Measurement = NewType("Measurement", pd.DataFrame)
 _DATETIME64_UNIT = "ms"
 
 
-@dataclass
+@dataclass(frozen=True)
 class ChunkMeta:
-    path: str
+    path: Path
     start: pd.Timestamp
     end: pd.Timestamp
     solenoid_valve: int
@@ -133,12 +135,14 @@ def _reindex_timestamp(d):
     return d.set_index(timestamp)
 
 
-def iter_chunks(d: DataFile) -> Iterator[Chunk]:
+def iter_chunks(path: Path) -> Iterator[tuple[ChunkMeta, Chunk]]:
+    d = read_raw(path)
     d = d.pipe(_drop_data_between_valves)
     valve_just_changed = d[PicarroColumns.solenoid_valves].diff() != 0
     valve_change_count = valve_just_changed.cumsum()
-    for i, g in d.groupby(valve_change_count):  # type: ignore
-        yield g
+    for i, chunk in d.groupby(valve_change_count):  # type: ignore
+        chunk_meta = _build_chunk_metadata(chunk, path)
+        yield chunk_meta, chunk
 
 
 def _drop_data_between_valves(data):
@@ -150,7 +154,7 @@ def _drop_data_between_valves(data):
     return data[~is_between_valves].astype({PicarroColumns.solenoid_valves: int})
 
 
-def _get_chunk_metadata(chunk: Chunk, path: str):
+def _build_chunk_metadata(chunk: Chunk, path: Path):
     solenoid_valves = chunk[PicarroColumns.solenoid_valves].unique()
     assert len(solenoid_valves) == 1, solenoid_valves
     (the_valve,) = solenoid_valves
@@ -161,10 +165,6 @@ def _get_chunk_metadata(chunk: Chunk, path: str):
         int(the_valve),
         len(chunk),
     )
-
-
-def get_chunks_metadata(data: DataFile, path: Union[Path, str]) -> List[ChunkMeta]:
-    return [_get_chunk_metadata(chunk, str(path)) for chunk in iter_chunks(data)]
 
 
 def iter_measurements_meta(
@@ -200,20 +200,19 @@ def iter_measurements(
     measurement_metas: Iterable[MeasurementMeta],
     columns: Optional[Sequence[str]] = None,
 ) -> Iterator[Measurement]:
-    read_cache = {
-        "path": Path(),
-        "data": pd.DataFrame(),
-    }
+    read_cache = {}
+
+    def read_file_into_cache(path: Path):
+        read_cache.update(iter_chunks(path))
 
     def read_chunk(chunk_meta: ChunkMeta):
-        if chunk_meta.path != read_cache["path"]:
-            read_cache["path"] = chunk_meta.path
-            read_cache["data"] = read_raw(chunk_meta.path)
-            if columns is not None:
-                read_cache["data"] = read_cache["data"][columns]
+        if chunk_meta not in read_cache:
+            read_file_into_cache(chunk_meta.path)
 
-        data = read_cache["data"]
-        return data.loc[chunk_meta.start : chunk_meta.end]
+        chunk = read_cache[chunk_meta]
+        if columns is not None:
+            chunk = chunk[columns]
+        return chunk
 
     for measurement_meta in measurement_metas:
         measurement = pd.concat(list(map(read_chunk, measurement_meta.chunks)))

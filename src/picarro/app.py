@@ -15,6 +15,8 @@ import json
 import cattr.preconf.json
 
 _json_converter = cattr.preconf.json.make_converter()
+_json_converter.register_unstructure_hook(Path, str)
+_json_converter.register_structure_hook(Path, lambda v, _: Path(v))
 _json_converter.register_unstructure_hook(pd.Timestamp, str)
 _json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
 
@@ -116,8 +118,7 @@ def _create_chunks_meta(config: AppConfig, data_file_path: Path):
     meta_path = _get_chunks_meta_path(config, data_file_path)
     if meta_path.exists():
         return
-    data = picarro.read.read_raw(data_file_path)
-    chunks_meta = picarro.read.get_chunks_metadata(data, data_file_path)
+    chunks_meta, _ = zip(*picarro.read.iter_chunks(data_file_path))
     _save_json(_json_converter.unstructure(chunks_meta), meta_path)
 
 
