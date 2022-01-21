@@ -41,7 +41,7 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
         user=UserConfig(
             ReadConfig(
                 src="data-dir/**/*.dat",
-                columns=["CH4", "CO2", "DATE"],
+                columns=["CH4", "CO2", "EPOCH_TIME"],
                 max_gap=pd.Timedelta(5, "s"),
                 min_length=pd.Timedelta(1080, "s"),
                 max_length=None,
@@ -147,6 +147,6 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         paths = list((app_config.results_dir_absolute / "measurements").iterdir())
         assert len(paths) == len(expected_summaries)
         for path, summary in zip(sorted(paths), expected_summaries):
-            data = pd.read_csv(path, index_col="EPOCH_TIME")
+            data = pd.read_csv(path, index_col="datetime_utc")
             assert list(data.columns) == app_config.user.measurements.columns
             assert len(data) == summary["length"]

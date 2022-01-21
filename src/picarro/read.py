@@ -16,6 +16,7 @@ from typing import (
 )
 import pandas as pd
 
+INDEX_NAME = "datetime_utc"
 
 class PicarroColumns:
     DATE = "DATE"
@@ -119,7 +120,11 @@ def _reindex_timestamp(d):
     # In order to exactly represent this data as a timestamp, we do the
     # conversion by first converting to integer milliseconds.
     timestamp = pd.to_datetime(
-        d[PicarroColumns.EPOCH_TIME].mul(1e3).round().astype("int64"),
+        d[PicarroColumns.EPOCH_TIME]
+        .mul(1e3)
+        .round()
+        .astype("int64")
+        .rename(INDEX_NAME),
         unit=_DATETIME64_UNIT,
     )
     if not timestamp.is_unique:
