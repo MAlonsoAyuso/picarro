@@ -1,7 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import glob
-from hashlib import sha256
 import itertools
 import os
 from pathlib import Path
@@ -20,8 +19,6 @@ _json_converter.register_structure_hook(Path, lambda v, _: Path(v))
 _json_converter.register_unstructure_hook(pd.Timestamp, str)
 _json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
 
-_CHUNK_META_DIR = "chunks"
-
 
 @dataclass
 class AnalysisResult:
@@ -30,7 +27,7 @@ class AnalysisResult:
 
 
 def iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:
-    file_paths = _glob_recursive_in_dir(config.user.measurements.src, config.src_dir)
+    file_paths = _glob_recursive_in_dir(config.user.measurements.src, config.base_dir)
     for path in file_paths:
         _create_chunk_metas(config, path)
 
@@ -76,9 +73,9 @@ def iter_analysis_results(config: AppConfig) -> Iterator[AnalysisResult]:
             )
 
 
-def claim_outdir(config: AppConfig) -> Path:
-    outdir = config.results_dir_absolute
-    marker_file_path = outdir / ".picarro-output"
+def claim_outdir(config: AppConfig):
+    outdir = config.paths.out
+    marker_file_path = config.paths.out_marker
 
     if outdir.exists() and not outdir.is_dir():
         raise FileExistsError(
@@ -95,15 +92,13 @@ def claim_outdir(config: AppConfig) -> Path:
 
     marker_file_path.touch()
 
-    return outdir
-
 
 def export_measurements(config: AppConfig):
-    outdir = claim_outdir(config) / "measurements"
-    outdir.mkdir(exist_ok=True)
+    claim_outdir(config)
+    config.paths.out_measurements.mkdir(exist_ok=True)
     for measurement in iter_measurements(config):
         file_name = measurement.index[0].isoformat().replace(":", "_") + ".csv"
-        path = outdir / file_name
+        path = config.paths.out_measurements / file_name
         measurement[config.user.measurements.columns].to_csv(path)
 
 
@@ -116,8 +111,9 @@ def _glob_recursive_in_dir(pattern: str, glob_dir: Path) -> list[Path]:
 
 
 def _create_chunk_metas(config: AppConfig, data_file_path: Path):
+    claim_outdir(config)
     assert data_file_path.is_absolute(), data_file_path
-    meta_path = _get_chunk_meta_path(config, data_file_path)
+    meta_path = config.paths.cache_chunk_meta(data_file_path)
     if meta_path.exists():
         return
     chunk_metas, _ = zip(*picarro.read.iter_chunks(data_file_path))
@@ -126,21 +122,9 @@ def _create_chunk_metas(config: AppConfig, data_file_path: Path):
 
 def _load_chunk_metas(config: AppConfig, data_file_path: Path) -> list[ChunkMeta]:
     assert data_file_path.is_absolute(), data_file_path
-    meta_path = _get_chunk_meta_path(config, data_file_path)
+    meta_path = config.paths.cache_chunk_meta(data_file_path)
     data = _load_json(meta_path)
     return _json_converter.structure(data, List[ChunkMeta])
-
-
-def _get_chunk_meta_path(config: AppConfig, data_file_path: Path) -> Path:
-    assert data_file_path.is_absolute(), data_file_path
-    file_name = f"{data_file_path.name}-{_repr_hash(data_file_path)}.json"
-    return config.cache_dir_absolute / _CHUNK_META_DIR / file_name
-
-
-def _repr_hash(obj: Any) -> str:
-    m = sha256()
-    m.update(repr(obj).encode())
-    return m.hexdigest()
 
 
 def _save_json(obj: Any, path: Path):

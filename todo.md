@@ -6,9 +6,7 @@
 - Write docs
 - Decide on a license and update package metadata
 - Minor things
-  - Cache in results directory
   - Make flux estimation config optional
-  - Ensure solenoid_valves is exported as int
 
 ## Maybe later
 

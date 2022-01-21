@@ -35,10 +35,9 @@ def app_config(tmp_path: Path) -> AppConfig:
 
 
 def test_create_config(app_config: AppConfig, tmp_path: Path):
-    expected_conf = AppConfig(
-        src_dir=tmp_path,
-        results_subdir="config-filename-stem",
-        user=UserConfig(
+    expected_conf = AppConfig.create(
+        base_dir=tmp_path,
+        user_config=UserConfig(
             ReadConfig(
                 src="data-dir/**/*.dat",
                 columns=["CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
@@ -61,11 +60,6 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
 
     assert app_config == expected_conf
 
-    assert app_config.cache_dir_absolute.is_absolute(), app_config.cache_dir_absolute
-    assert (
-        app_config.results_dir_absolute.is_absolute()
-    ), app_config.results_dir_absolute
-
 
 def call_immediately(func: Callable[[], None]) -> None:
     func()
@@ -78,6 +72,18 @@ def summarize_measurement(mm: MeasurementMeta):
 def test_integrated(app_config: AppConfig, tmp_path: Path):
     data_dir = tmp_path / "data-dir" / "nested" / "path"
     shutil.copytree(_EXAMPLE_DATA_DIR / "adjacent_files", data_dir)
+
+    @call_immediately
+    def test_will_not_overwrite():
+        # Test that it won't do anything if there is a non-empty out directory
+        # without a marker file
+        out_dir = app_config.paths.out
+        out_dir.mkdir()
+        blocking_file_path = out_dir / "file"
+        blocking_file_path.touch()
+        with pytest.raises(FileExistsError):
+            list(picarro.app.iter_measurements(app_config))
+        os.remove(blocking_file_path)
 
     # These were established by manually sifting through the files
     expected_summaries = [
@@ -131,20 +137,10 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         assert expected_analysis_results == seen_analysis_results
 
     @call_immediately
-    def test_will_not_overwrite():
-        # Test that it won't write into a non-empty results directory
-        app_config.results_dir_absolute.mkdir()
-        blocking_file_path = app_config.results_dir_absolute / "file"
-        blocking_file_path.touch()
-        with pytest.raises(FileExistsError):
-            picarro.app.export_measurements(app_config)
-        os.remove(blocking_file_path)
-
-    @call_immediately
     def test_export_measurement_data():
         # Test exporting measurements
         picarro.app.export_measurements(app_config)
-        paths = list((app_config.results_dir_absolute / "measurements").iterdir())
+        paths = list(app_config.paths.out_measurements.iterdir())
         assert len(paths) == len(expected_summaries)
         for path, summary in zip(sorted(paths), expected_summaries):
             data = pd.read_csv(path, index_col="datetime_utc")
