@@ -92,6 +92,8 @@ class _FluxEstimatorBase:
     @staticmethod
     def _determine_moments(data: TimeSeries, config: FluxEstimationConfig) -> Moments:
         assert isinstance(data.index, pd.DatetimeIndex)
+        if len(data) == 0:
+            raise ValueError(f"Empty dataset {data}")
         data_start = data.index[0]
         data_end = data.index[-1]
         t0 = data_start + datetime.timedelta(seconds=config.t0_delay)
@@ -101,6 +103,11 @@ class _FluxEstimatorBase:
         fit_index = data.index[
             (data.index >= fit_start_limit) & (data.index <= fit_end_limit)
         ]
+        if len(fit_index) == 0:
+            raise ValueError(
+                f"Check limits! No data in fit range {[fit_start_limit, fit_end_limit]} "
+                f"for dataset \n{data}"
+            )
         fit_start, fit_end = fit_index[0], fit_index[-1]
 
         return Moments(data_start, t0, fit_start, fit_end, data_end)

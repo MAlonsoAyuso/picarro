@@ -35,10 +35,24 @@ def iter_measurements_meta(config: AppConfig) -> Iterator[MeasurementMeta]:
 
     chunks_meta = (_load_chunks_meta(config, path) for path in file_paths)
 
-    return picarro.read.iter_measurements_meta(
+    measurement_metas = picarro.read.iter_measurements_meta(
         itertools.chain(*chunks_meta),
         pd.Timedelta(config.user.measurements.max_gap, _CONFIG_TIME_UNIT),
     )
+
+    for measurement_meta in measurement_metas:
+        length = measurement_meta.end - measurement_meta.start  # type: ignore
+        min_length = pd.Timedelta(
+            config.user.measurements.min_length, _CONFIG_TIME_UNIT
+        )
+        max_length = pd.Timedelta(
+            config.user.measurements.max_length, _CONFIG_TIME_UNIT
+        )
+        if length < min_length:
+            continue
+        if max_length < length:
+            continue
+        yield measurement_meta
 
 
 def iter_measurements(config: AppConfig) -> Iterator[Measurement]:

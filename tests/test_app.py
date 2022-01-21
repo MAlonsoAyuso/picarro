@@ -3,7 +3,13 @@ from pathlib import Path
 import shutil
 import pytest
 import picarro.app
-from picarro.config import AppConfig, UserConfig, ReadConfig, FluxEstimationConfig, OutputConfig
+from picarro.config import (
+    AppConfig,
+    UserConfig,
+    ReadConfig,
+    FluxEstimationConfig,
+    OutputConfig,
+)
 from picarro.read import MeasurementMeta, PicarroColumns
 
 
@@ -58,7 +64,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
 
     # These were established by manually sifting through the files
     expected_summaries = [
-        dict(solenoid_valve=13, length=217),
+        # one removed here compared to the full set, because it's too short
         dict(solenoid_valve=14, length=1789),
         dict(solenoid_valve=15, length=1787),
         dict(solenoid_valve=1, length=1779),
@@ -66,7 +72,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         dict(solenoid_valve=3, length=1789),
         dict(solenoid_valve=4, length=1786),
         dict(solenoid_valve=5, length=1783),
-        dict(solenoid_valve=6, length=716),
+        # one removed here compared to the full set, because it's too short
     ]
 
     def summarize_measurement(mm: MeasurementMeta):
