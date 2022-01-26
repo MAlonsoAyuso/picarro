@@ -2,6 +2,9 @@ from pathlib import Path
 import click
 import picarro.config
 import picarro.app
+import logging
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG_PATH = Path("picarro_config.toml")
 
@@ -16,6 +19,7 @@ _DEFAULT_CONFIG_PATH = Path("picarro_config.toml")
 def cli(ctx: click.Context, config: Path):
     ctx.ensure_object(dict)
     ctx.obj["config"] = picarro.config.AppConfig.from_toml(config)
+    picarro.app.setup_logging(ctx.obj["config"])
 
 
 @cli.command()
@@ -32,6 +36,7 @@ def export_fluxes(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, picarro.config.AppConfig), config
     picarro.app.export_fluxes(config)
+
 
 @cli.command()
 @click.pass_context

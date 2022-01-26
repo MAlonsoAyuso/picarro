@@ -1,7 +1,5 @@
 from __future__ import annotations
-from asyncore import read
 from dataclasses import dataclass
-import dataclasses
 from os import PathLike
 from pathlib import Path
 from typing import (
@@ -15,7 +13,10 @@ from typing import (
     cast,
     Union,
 )
+import logging
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 INDEX_NAME = "datetime_utc"
 
@@ -110,6 +111,7 @@ class MeasurementMeta:
 
 
 def read_raw(path: Union[PathLike, str]) -> DataFile:
+    logger.info(f"read_raw {path}")
     d = pd.read_csv(path, sep=r"\s+").pipe(_reindex_timestamp)
     return cast(DataFile, d)
 
@@ -136,6 +138,7 @@ def _reindex_timestamp(d):
 
 
 def iter_chunks(path: Path) -> Iterator[tuple[ChunkMeta, Chunk]]:
+    logger.info(f"iter_chunks {path}")
     d = read_raw(path)
     d = d.pipe(_drop_data_between_valves)
     valve_just_changed = d[PicarroColumns.solenoid_valves].diff() != 0

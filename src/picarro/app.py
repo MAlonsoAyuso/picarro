@@ -4,6 +4,7 @@ import itertools
 import os
 from pathlib import Path
 from typing import Any, Iterator, List
+import functools
 from picarro.analyze import AnalysisResult, estimate_flux
 from picarro.config import AppConfig
 import picarro.read
@@ -12,12 +13,33 @@ from picarro.read import Measurement, MeasurementMeta, ChunkMeta
 import pandas as pd
 import json
 import cattr.preconf.json
+import logging.config
+import logging
+
+logger = logging.getLogger(__name__)
 
 _json_converter = cattr.preconf.json.make_converter()
 _json_converter.register_unstructure_hook(Path, str)
 _json_converter.register_structure_hook(Path, lambda v, _: Path(v))
 _json_converter.register_unstructure_hook(pd.Timestamp, str)
 _json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
+
+
+def log_unhandled_exceptions(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            logger.exception(f"Unhandled exception: {e}")
+            raise
+    return wrapper
+
+def setup_logging(config: AppConfig):
+    cwd = Path.cwd()
+    os.chdir(config.paths.out)
+    logging.config.dictConfig(config.user.logging)
+    os.chdir(cwd)
 
 
 def iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:
@@ -90,7 +112,7 @@ def claim_outdir(config: AppConfig):
 def _build_measurement_filename_stem(measurement: Measurement) -> str:
     return measurement.index[0].isoformat().replace(":", "_")
 
-
+@log_unhandled_exceptions
 def export_measurements(config: AppConfig):
     claim_outdir(config)
     config.paths.out_measurements.mkdir(exist_ok=True)

@@ -1,12 +1,23 @@
 from __future__ import annotations
+import copy
 from dataclasses import dataclass, field
+import dataclasses
 from email.mime import base
 from hashlib import sha256
+from logging import StreamHandler
+from logging.config import dictConfig
+from os import path
 from pathlib import Path
-from typing import Any, Dict, Hashable, Iterable, List, Optional, TypeVar
-import datetime
-from xml.etree.ElementTree import PI
-from numpy import iterable
+from typing import (
+    Any,
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Optional,
+    TypeVar,
+    Union,
+)
 import toml
 import cattr.preconf.tomlkit
 import pandas as pd
@@ -59,11 +70,48 @@ class OutputConfig:
     out_dir: Path = Path("picarro_results")
 
 
+# https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema
+LogSettingsDict = Dict[str, Any]
+
+DEFAULT_LOG_SETTINGS = {
+    "formatters": {
+        "picarro_default": {
+            "format": "%(asctime)s %(levelname)-8s %(name)-18s %(message)s",
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "formatter": "picarro_default",
+        },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "level": "INFO",
+            "filename": "log.txt",
+            "formatter": "picarro_default",
+            "maxBytes": 1e6,
+            "backupCount": 2,
+        },
+    },
+    "root": {
+        "level": "INFO",
+        "handlers": [
+            "console",
+            "file",
+        ],
+    },
+    "version": 1,
+    "disable_existing_loggers": False,
+}
+
+
 @dataclass(frozen=True)
 class UserConfig:
     measurements: ReadConfig
     flux_estimation: FluxEstimationConfig
     output: OutputConfig = field(default_factory=OutputConfig)
+    logging: LogSettingsDict = field(default_factory=lambda: DEFAULT_LOG_SETTINGS)
 
 
 HT = TypeVar("HT", bound=Hashable)
