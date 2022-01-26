@@ -8,6 +8,3 @@ dist
 # vs code
 *.code-workspace
 .vscode
-
-# project outdata
-outdata
