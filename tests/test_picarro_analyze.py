@@ -93,14 +93,11 @@ def test_estimate_N2O_vol_flux_right_order_of_magnitude():
 
     slope = 1.44022e-4  # ppmv / s
     moments = estimator.moments
-    total_measurement_time = (moments.data_end - moments.data_start).total_seconds()
     elapsed_time_at_mid_of_fit = (
         moments.fit_start + (moments.fit_end - moments.fit_start) / 2 - moments.t0
     ).total_seconds()
-    tau = linear_config.V / linear_config.Q
-    h = linear_config.V / linear_config.A
-    correction_factor = np.exp(elapsed_time_at_mid_of_fit / tau)
-    expected_result = h * slope * correction_factor
+    correction_factor = np.exp(elapsed_time_at_mid_of_fit / linear_config.tau)
+    expected_result = linear_config.h * slope * correction_factor
 
     assert abs_rel_diff(vol_flux, expected_result) < 0.001  # m/s
 

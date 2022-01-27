@@ -16,6 +16,10 @@ from typing import (
 import toml
 import cattr.preconf.tomlkit
 import pandas as pd
+import logging
+from math import isnan
+
+logger = logging.getLogger(__name__)
 
 CONFIG_TIME_UNIT = "s"
 
@@ -98,9 +102,33 @@ class FluxEstimationConfig:
     columns: List[str]
     t0_delay: pd.Timedelta
     t0_margin: pd.Timedelta
-    A: float
-    Q: float
-    V: float
+    A: float = float("nan")
+    Q: float = float("nan")
+    V: float = float("nan")
+    tau: float = float("nan")
+    h: float = float("nan")
+
+    def __post_init__(self):
+        if isnan(self.tau):
+            if isnan(self.V) or isnan(self.Q):
+                raise ValueError("Must specify tau or (V, Q)")
+            object.__setattr__(self, "tau", self.V / self.Q)
+            logger.debug(f"calculated tau = V / Q = {self.V} / {self.Q} = {self.tau}")
+        else:
+            if not (isnan(self.V) or isnan(self.Q)):
+                raise ValueError("Must specify tau or (V, Q), not all three")
+
+        if isnan(self.h):
+            if isnan(self.V) or isnan(self.A):
+                raise ValueError("Must specify h or (V, A)")
+            object.__setattr__(self, "h", self.V / self.A)
+            logger.debug(f"calculated h = V / A = {self.V} / {self.A} = {self.h}")
+        else:
+            if not (isnan(self.V) or isnan(self.A)):
+                raise ValueError("Must specify h or (V, A), not all three")
+
+        assert not isnan(self.tau)
+        assert not isnan(self.h)
 
 
 @dataclass(frozen=True)

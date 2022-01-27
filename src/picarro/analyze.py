@@ -131,9 +131,11 @@ class LinearEstimator(_FluxEstimatorBase):
         fit_duration = self.moments.fit_end - self.moments.fit_start
         fit_midpoint = self.moments.fit_start + fit_duration / 2
         seconds_elapsed = (fit_midpoint - self.moments.t0).total_seconds()
-        h = self.config.V / self.config.A
-        tau = self.config.V / self.config.Q
-        vol_flux = h * np.exp(seconds_elapsed / tau) * self.fit_params.slope
+        vol_flux = (
+            self.config.h
+            * np.exp(seconds_elapsed / self.config.tau)
+            * self.fit_params.slope
+        )
         return vol_flux
 
 
@@ -146,9 +148,8 @@ class ExponentialEstimator(_FluxEstimatorBase):
         # Since estimation is linear, it does not matter what unit we have for time.
         # Referencing here from times[0] for easier debugging: now we know
         # that the regression x variable represents elapsed seconds of the measurement.
-        tau = config.V / config.Q
         elapsed_seconds = (times - moments.t0).total_seconds()  # type: ignore
-        return 1 - np.exp(-elapsed_seconds / tau)
+        return 1 - np.exp(-elapsed_seconds / config.tau)
 
     def estimate_vol_flux(self) -> VolumetricFlux:
         # In principle we want to estimate the derivative of the exponential curve
@@ -156,9 +157,7 @@ class ExponentialEstimator(_FluxEstimatorBase):
         # But in practice the fit here is a linear fit to a part of the curve.
         # Here I'm assuming that the slope of the linear fit is approximately
         # equal to the derivative at the midpoint of the exponential fit.
-        h = self.config.V / self.config.A
-        tau = self.config.V / self.config.Q
-        vol_flux = h / tau * self.fit_params.slope
+        vol_flux = self.config.h / self.config.tau * self.fit_params.slope
         return float(vol_flux)
 
 
