@@ -180,20 +180,6 @@ class UserConfig:
     logging: LogSettingsDict = field(default_factory=lambda: DEFAULT_LOG_SETTINGS)
 
 
-HT = TypeVar("HT", bound=Hashable)
-
-
-def _deduplicate(src: Iterable[HT]) -> list[HT]:
-    result = []
-    seen = set()
-    for item in src:
-        if item in seen:
-            continue
-        seen.add(item)
-        result.append(item)
-    return result
-
-
 @dataclass
 class AppPaths:
     base: Path
@@ -253,13 +239,3 @@ class AppConfig:
     def create(base_dir: Path, user_config: UserConfig):
         app_paths = AppPaths.create(base_dir, user_config.output.out_dir)
         return AppConfig(base_dir, user_config, app_paths)
-
-    @property
-    def columns_to_read(self) -> list[str]:
-        return _deduplicate(
-            [
-                *self.user.measurements.columns,
-                *self.user.flux_estimation.columns,
-                *_ALWAYS_READ_COLUMNS,
-            ]
-        )
