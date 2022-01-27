@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from picarro.analyze import ESTIMATORS
 from picarro.analyze import AnalysisResult
-from picarro.read import CONC_UNITS, Measurement
+from picarro.read import Measurement
 import pandas as pd
 
 with resources.path("picarro.resources", "matplotlib-style") as path:
@@ -20,9 +20,6 @@ _ESTIMATOR_COLORS = dict(zip(ESTIMATORS, colors))
 
 
 def _subplot_title(column):
-    if column in CONC_UNITS:
-        return f"{column} ({CONC_UNITS[column]})"
-
     return column
 
 

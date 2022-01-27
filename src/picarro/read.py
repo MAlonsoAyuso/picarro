@@ -18,12 +18,6 @@ logger = logging.getLogger(__name__)
 
 INDEX_NAME = "datetime_utc"
 
-CONC_UNITS = {
-    PicarroColumns.CH4: "ppmv",
-    PicarroColumns.CO2: "ppmv",
-    PicarroColumns.N2O: "ppmv",
-}
-
 # DataFile: A DataFrame from a whole .dat file (after some basic parsing)
 # Chunk: A DataFrame with a contiguous subset of a DataFile,
 #   with exactly one solenoid valve value.
