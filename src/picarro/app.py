@@ -33,7 +33,9 @@ def log_unhandled_exceptions(func):
         except Exception as e:
             logger.exception(f"Unhandled exception: {e}")
             raise
+
     return wrapper
+
 
 def setup_logging(config: AppConfig):
     cwd = Path.cwd()
@@ -69,7 +71,7 @@ def iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:
 
 def iter_measurements(config: AppConfig) -> Iterator[Measurement]:
     return picarro.read.iter_measurements(
-        iter_measurement_metas(config), config.columns_to_read
+        iter_measurement_metas(config), config.user.measurements
     )
 
 
@@ -77,7 +79,7 @@ def iter_measurement_pairs(
     config: AppConfig,
 ) -> Iterator[tuple[MeasurementMeta, Measurement]]:
     mms_1, mms_2 = itertools.tee(iter_measurement_metas(config))
-    return zip(mms_1, picarro.read.iter_measurements(mms_2))
+    return zip(mms_1, picarro.read.iter_measurements(mms_2, config.user.measurements))
 
 
 def iter_analysis_results(config: AppConfig) -> Iterator[AnalysisResult]:
@@ -111,6 +113,7 @@ def claim_outdir(config: AppConfig):
 
 def _build_measurement_filename_stem(measurement: Measurement) -> str:
     return measurement.index[0].isoformat().replace(":", "_")
+
 
 @log_unhandled_exceptions
 def export_measurements(config: AppConfig):
@@ -174,7 +177,9 @@ def _create_chunk_metas(config: AppConfig, data_file_path: Path):
     meta_path = config.paths.cache_chunk_meta(data_file_path)
     if meta_path.exists():
         return
-    chunk_metas, _ = zip(*picarro.read.iter_chunks(data_file_path))
+    chunk_metas, _ = zip(
+        *picarro.read.iter_chunks(data_file_path, config.user.measurements)
+    )
     _save_json(_json_converter.unstructure(chunk_metas), meta_path)
 
 

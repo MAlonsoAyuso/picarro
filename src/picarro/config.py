@@ -1,12 +1,7 @@
 from __future__ import annotations
-import copy
 from dataclasses import dataclass, field
-import dataclasses
-from email.mime import base
+from enum import Enum
 from hashlib import sha256
-from logging import StreamHandler
-from logging.config import dictConfig
-from os import path
 from pathlib import Path
 from typing import (
     Any,
@@ -15,14 +10,12 @@ from typing import (
     Iterable,
     List,
     Optional,
+    List,
     TypeVar,
-    Union,
 )
 import toml
 import cattr.preconf.tomlkit
 import pandas as pd
-
-from picarro.read import PicarroColumns
 
 CONFIG_TIME_UNIT = "s"
 
@@ -32,18 +25,71 @@ _toml_converter.register_structure_hook(
     pd.Timedelta, lambda v, _: pd.Timedelta(v, CONFIG_TIME_UNIT)
 )
 
-_ALWAYS_READ_COLUMNS = [
-    PicarroColumns.solenoid_valves,
-]
+
+class PicarroColumns:
+    DATE = "DATE"
+    TIME = "TIME"
+    FRAC_DAYS_SINCE_JAN1 = "FRAC_DAYS_SINCE_JAN1"
+    FRAC_HRS_SINCE_JAN1 = "FRAC_HRS_SINCE_JAN1"
+    JULIAN_DAYS = "JULIAN_DAYS"
+    EPOCH_TIME = "EPOCH_TIME"
+    ALARM_STATUS = "ALARM_STATUS"
+    INST_STATUS = "INST_STATUS"
+    CavityPressure = "CavityPressure"
+    CavityTemp = "CavityTemp"
+    DasTemp = "DasTemp"
+    EtalonTemp = "EtalonTemp"
+    WarmBoxTemp = "WarmBoxTemp"
+    species = "species"
+    MPVPosition = "MPVPosition"
+    OutletValve = "OutletValve"
+    solenoid_valves = "solenoid_valves"
+    N2O = "N2O"
+    N2O_30s = "N2O_30s"
+    N2O_1min = "N2O_1min"
+    N2O_5min = "N2O_5min"
+    N2O_dry = "N2O_dry"
+    N2O_dry30s = "N2O_dry30s"
+    N2O_dry1min = "N2O_dry1min"
+    N2O_dry5min = "N2O_dry5min"
+    CO2 = "CO2"
+    CH4 = "CH4"
+    CH4_dry = "CH4_dry"
+    H2O = "H2O"
+    NH3 = "NH3"
+    ChemDetect = "ChemDetect"
+    peak_1a = "peak_1a"
+    peak_41 = "peak_41"
+    peak_4 = "peak_4"
+    peak15 = "peak15"
+    ch4_splinemax = "ch4_splinemax"
+    nh3_conc_ave = "nh3_conc_ave"
+
+
+Column = str
+
+
+class InvalidRowHandling(Enum):
+    skip = "skip"
+    error = "error"
 
 
 @dataclass(frozen=True)
-class ReadConfig:
-    src: str  # path or glob
-    columns: List[str]
+class ParsingConfig:
+    columns: List[str] = field(default_factory=list)
+    null_rows: InvalidRowHandling = InvalidRowHandling.skip
+
+
+@dataclass(frozen=True)
+class MeasurementConfig:
     max_gap: pd.Timedelta = pd.Timedelta(10, "s")
     min_duration: Optional[pd.Timedelta] = None
     max_duration: Optional[pd.Timedelta] = None
+
+
+@dataclass(frozen=True)
+class ReadConfig(ParsingConfig, MeasurementConfig):
+    src: str = ""
 
 
 _VOLUME_UNITS = {

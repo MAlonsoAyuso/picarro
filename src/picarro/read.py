@@ -3,63 +3,20 @@ from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
 from typing import (
-    Any,
     Iterable,
     Iterator,
     List,
     NewType,
-    Optional,
-    Sequence,
     cast,
     Union,
 )
 import logging
 import pandas as pd
+from picarro.config import InvalidRowHandling, ParsingConfig, PicarroColumns, ReadConfig
 
 logger = logging.getLogger(__name__)
 
 INDEX_NAME = "datetime_utc"
-
-
-class PicarroColumns:
-    DATE = "DATE"
-    TIME = "TIME"
-    FRAC_DAYS_SINCE_JAN1 = "FRAC_DAYS_SINCE_JAN1"
-    FRAC_HRS_SINCE_JAN1 = "FRAC_HRS_SINCE_JAN1"
-    JULIAN_DAYS = "JULIAN_DAYS"
-    EPOCH_TIME = "EPOCH_TIME"
-    ALARM_STATUS = "ALARM_STATUS"
-    INST_STATUS = "INST_STATUS"
-    CavityPressure = "CavityPressure"
-    CavityTemp = "CavityTemp"
-    DasTemp = "DasTemp"
-    EtalonTemp = "EtalonTemp"
-    WarmBoxTemp = "WarmBoxTemp"
-    species = "species"
-    MPVPosition = "MPVPosition"
-    OutletValve = "OutletValve"
-    solenoid_valves = "solenoid_valves"
-    N2O = "N2O"
-    N2O_30s = "N2O_30s"
-    N2O_1min = "N2O_1min"
-    N2O_5min = "N2O_5min"
-    N2O_dry = "N2O_dry"
-    N2O_dry30s = "N2O_dry30s"
-    N2O_dry1min = "N2O_dry1min"
-    N2O_dry5min = "N2O_dry5min"
-    CO2 = "CO2"
-    CH4 = "CH4"
-    CH4_dry = "CH4_dry"
-    H2O = "H2O"
-    NH3 = "NH3"
-    ChemDetect = "ChemDetect"
-    peak_1a = "peak_1a"
-    peak_41 = "peak_41"
-    peak_4 = "peak_4"
-    peak15 = "peak15"
-    ch4_splinemax = "ch4_splinemax"
-    nh3_conc_ave = "nh3_conc_ave"
-
 
 CONC_UNITS = {
     PicarroColumns.CH4: "ppmv",
@@ -110,9 +67,57 @@ class MeasurementMeta:
         )
 
 
-def read_raw(path: Union[PathLike, str]) -> DataFile:
+class CannotParse(ValueError):
+    pass
+
+
+class InvalidData(CannotParse):
+    pass
+
+
+_ALWAYS_READ_COLUMNS = [PicarroColumns.EPOCH_TIME, PicarroColumns.solenoid_valves]
+
+
+def _get_columns_to_read(user_columns: List[str]) -> List[str]:
+    extra = [c for c in _ALWAYS_READ_COLUMNS if c not in set(user_columns)]
+    return user_columns + extra
+
+
+def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
+    file_line_numbers = pd.RangeIndex(2, len(d) + 2)  # for debugging
+    d = d.set_index(file_line_numbers)
+
+    # Extract requested columns
+    columns_to_read = _get_columns_to_read(config.columns)
+    missing_columns = set(config.columns) - set(columns_to_read)
+    if missing_columns:
+        raise InvalidData(f"Missing columns {missing_columns}.")
+    d = d[columns_to_read]
+
+    # Reindex as time stamp
+    d = d.pipe(_reindex_timestamp)
+
+    # Nulls
+    row_has_null = d.isnull().any(axis=1)
+    if row_has_null.any():
+        if config.null_rows == InvalidRowHandling.error:
+            row_num = row_has_null.loc[lambda x: x].index[0]
+            raise InvalidData(f"Missing value(s) in row {row_num}. {d.loc[row_num]}")
+        elif config.null_rows == InvalidRowHandling.skip:
+            n_violators = row_has_null.sum()
+            logger.warning(f"Skipping {n_violators} lines with null values.")
+            d = d.loc[~row_has_null]
+
+    return d
+
+
+def read_raw(path: Union[PathLike, str], config: ParsingConfig) -> DataFile:
     logger.info(f"read_raw {path}")
-    d = pd.read_csv(path, sep=r"\s+").pipe(_reindex_timestamp)
+    d = pd.read_csv(path, sep=r"\s+")
+    try:
+        d = _clean_raw_data(d, config)
+    except Exception as e:
+        raise CannotParse(f"{path}: {e}") from e
     return cast(DataFile, d)
 
 
@@ -123,6 +128,7 @@ def _reindex_timestamp(d):
     # The Picarro data is in seconds with three decimals.
     # In order to exactly represent this data as a timestamp, we do the
     # conversion by first converting to integer milliseconds.
+    print(d)
     timestamp = pd.to_datetime(
         d[PicarroColumns.EPOCH_TIME]
         .mul(1e3)
@@ -137,9 +143,9 @@ def _reindex_timestamp(d):
     return d.set_index(timestamp)
 
 
-def iter_chunks(path: Path) -> Iterator[tuple[ChunkMeta, Chunk]]:
+def iter_chunks(path: Path, config: ReadConfig) -> Iterator[tuple[ChunkMeta, Chunk]]:
     logger.info(f"iter_chunks {path}")
-    d = read_raw(path)
+    d = read_raw(path, config)
     d = d.pipe(_drop_data_between_valves)
     valve_just_changed = d[PicarroColumns.solenoid_valves].diff() != 0
     valve_change_count = valve_just_changed.cumsum()
@@ -201,20 +207,18 @@ def iter_measurement_metas(
 
 def iter_measurements(
     measurement_metas: Iterable[MeasurementMeta],
-    columns: Optional[Sequence[str]] = None,
+    config: ReadConfig,
 ) -> Iterator[Measurement]:
     read_cache = {}
 
     def read_file_into_cache(path: Path):
-        read_cache.update(iter_chunks(path))
+        read_cache.update(iter_chunks(path, config))
 
     def read_chunk(chunk_meta: ChunkMeta):
         if chunk_meta not in read_cache:
             read_file_into_cache(chunk_meta.path)
 
         chunk = read_cache[chunk_meta]
-        if columns is not None:
-            chunk = chunk[columns]
         return chunk
 
     for measurement_meta in measurement_metas:

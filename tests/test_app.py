@@ -1,4 +1,3 @@
-from ast import Call
 import os
 from pathlib import Path
 import shutil
@@ -40,7 +39,7 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
         user_config=UserConfig(
             ReadConfig(
                 src="data-dir/**/*.dat",
-                columns=["CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
+                columns=["N2O", "CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
                 max_gap=pd.Timedelta(5, "s"),
                 min_duration=pd.Timedelta(1080, "s"),
                 max_duration=None,
