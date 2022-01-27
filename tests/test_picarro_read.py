@@ -1,7 +1,7 @@
 from __future__ import annotations
 import itertools
 import pytest
-from picarro.config import ParsingConfig, ReadConfig
+from picarro.config import MeasurementsConfig
 from picarro.read import (
     ChunkMeta,
     iter_measurement_metas,
@@ -20,7 +20,7 @@ def data_path(relpath):
     return _DATA_DIR / relpath
 
 
-CONFIG = ReadConfig(
+CONFIG = MeasurementsConfig(
     columns=[
         PicarroColumns.solenoid_valves,
         PicarroColumns.EPOCH_TIME,

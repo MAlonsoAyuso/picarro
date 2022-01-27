@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from enum import Enum
 from os import PathLike
 from pathlib import Path
 from typing import (
@@ -7,16 +8,85 @@ from typing import (
     Iterator,
     List,
     NewType,
+    Optional,
     cast,
     Union,
 )
 import logging
+from dataclasses import field
 import pandas as pd
-from picarro.config import InvalidRowHandling, ParsingConfig, PicarroColumns, ReadConfig
 
 logger = logging.getLogger(__name__)
 
+
+class InvalidRowHandling(Enum):
+    skip = "skip"
+    error = "error"
+
+
+@dataclass(frozen=True)
+class ParsingConfig:
+    columns: List[str] = field(default_factory=list)
+    null_rows: InvalidRowHandling = InvalidRowHandling.skip
+    epoch_time_column: str = "EPOCH_TIME"
+
+
+@dataclass(frozen=True)
+class StitchingConfig:
+    max_gap: pd.Timedelta = pd.Timedelta(10, "s")
+    min_duration: Optional[pd.Timedelta] = None
+    max_duration: Optional[pd.Timedelta] = None
+
+
+@dataclass(frozen=True)
+class MeasurementsConfig(ParsingConfig, StitchingConfig):
+    src: str = ""
+
+
 INDEX_NAME = "datetime_utc"
+
+Column = str
+
+
+class PicarroColumns:
+    DATE = "DATE"
+    TIME = "TIME"
+    FRAC_DAYS_SINCE_JAN1 = "FRAC_DAYS_SINCE_JAN1"
+    FRAC_HRS_SINCE_JAN1 = "FRAC_HRS_SINCE_JAN1"
+    JULIAN_DAYS = "JULIAN_DAYS"
+    EPOCH_TIME = "EPOCH_TIME"
+    ALARM_STATUS = "ALARM_STATUS"
+    INST_STATUS = "INST_STATUS"
+    CavityPressure = "CavityPressure"
+    CavityTemp = "CavityTemp"
+    DasTemp = "DasTemp"
+    EtalonTemp = "EtalonTemp"
+    WarmBoxTemp = "WarmBoxTemp"
+    species = "species"
+    MPVPosition = "MPVPosition"
+    OutletValve = "OutletValve"
+    solenoid_valves = "solenoid_valves"
+    N2O = "N2O"
+    N2O_30s = "N2O_30s"
+    N2O_1min = "N2O_1min"
+    N2O_5min = "N2O_5min"
+    N2O_dry = "N2O_dry"
+    N2O_dry30s = "N2O_dry30s"
+    N2O_dry1min = "N2O_dry1min"
+    N2O_dry5min = "N2O_dry5min"
+    CO2 = "CO2"
+    CH4 = "CH4"
+    CH4_dry = "CH4_dry"
+    H2O = "H2O"
+    NH3 = "NH3"
+    ChemDetect = "ChemDetect"
+    peak_1a = "peak_1a"
+    peak_41 = "peak_41"
+    peak_4 = "peak_4"
+    peak15 = "peak15"
+    ch4_splinemax = "ch4_splinemax"
+    nh3_conc_ave = "nh3_conc_ave"
+
 
 # DataFile: A DataFrame from a whole .dat file (after some basic parsing)
 # Chunk: A DataFrame with a contiguous subset of a DataFile,
@@ -136,7 +206,9 @@ def _reindex_timestamp(d):
     return d.set_index(timestamp)
 
 
-def iter_chunks(path: Path, config: ReadConfig) -> Iterator[tuple[ChunkMeta, Chunk]]:
+def iter_chunks(
+    path: Path, config: MeasurementsConfig
+) -> Iterator[tuple[ChunkMeta, Chunk]]:
     logger.info(f"iter_chunks {path}")
     d = read_raw(path, config)
     d = d.pipe(_drop_data_between_valves)
@@ -200,7 +272,7 @@ def iter_measurement_metas(
 
 def iter_measurements(
     measurement_metas: Iterable[MeasurementMeta],
-    config: ReadConfig,
+    config: MeasurementsConfig,
 ) -> Iterator[Measurement]:
     read_cache = {}
 

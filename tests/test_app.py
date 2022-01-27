@@ -8,11 +8,10 @@ import picarro.app
 from picarro.config import (
     AppConfig,
     UserConfig,
-    ReadConfig,
     FluxEstimationConfig,
     OutputConfig,
 )
-from picarro.read import MeasurementMeta, PicarroColumns
+from picarro.read import MeasurementMeta, MeasurementsConfig, PicarroColumns
 import numpy as np
 import pandas as pd
 
@@ -37,7 +36,7 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
     expected_conf = AppConfig.create(
         base_dir=tmp_path,
         user_config=UserConfig(
-            ReadConfig(
+            MeasurementsConfig(
                 src="data-dir/**/*.dat",
                 columns=["N2O", "CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
                 max_gap=pd.Timedelta(5, "s"),

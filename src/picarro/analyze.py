@@ -1,16 +1,54 @@
 from __future__ import annotations
-from typing import Mapping, Type, Union
+from typing import List, Mapping, Type, Union
 from dataclasses import dataclass
 import datetime
 import pandas as pd
 import numpy as np
 import scipy.stats
-from picarro.config import FluxEstimationConfig
 from picarro.read import MeasurementMeta
+from math import isnan
+import logging
+
+logger = logging.getLogger(__name__)
 
 VolumetricFlux = float
 
 TimeSeries = pd.Series
+
+
+@dataclass(frozen=True)
+class FluxEstimationConfig:
+    method: str
+    columns: List[str]
+    t0_delay: pd.Timedelta
+    t0_margin: pd.Timedelta
+    A: float = float("nan")
+    Q: float = float("nan")
+    V: float = float("nan")
+    tau: float = float("nan")
+    h: float = float("nan")
+
+    def __post_init__(self):
+        if isnan(self.tau):
+            if isnan(self.V) or isnan(self.Q):
+                raise ValueError("Must specify tau or (V, Q)")
+            object.__setattr__(self, "tau", self.V / self.Q)
+            logger.debug(f"calculated tau = V / Q = {self.V} / {self.Q} = {self.tau}")
+        else:
+            if not (isnan(self.V) or isnan(self.Q)):
+                raise ValueError("Must specify tau or (V, Q), not all three")
+
+        if isnan(self.h):
+            if isnan(self.V) or isnan(self.A):
+                raise ValueError("Must specify h or (V, A)")
+            object.__setattr__(self, "h", self.V / self.A)
+            logger.debug(f"calculated h = V / A = {self.V} / {self.A} = {self.h}")
+        else:
+            if not (isnan(self.V) or isnan(self.A)):
+                raise ValueError("Must specify h or (V, A), not all three")
+
+        assert not isnan(self.tau)
+        assert not isnan(self.h)
 
 
 @dataclass
