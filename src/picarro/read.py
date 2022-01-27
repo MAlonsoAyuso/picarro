@@ -128,7 +128,6 @@ def _reindex_timestamp(d):
     # The Picarro data is in seconds with three decimals.
     # In order to exactly represent this data as a timestamp, we do the
     # conversion by first converting to integer milliseconds.
-    print(d)
     timestamp = pd.to_datetime(
         d[PicarroColumns.EPOCH_TIME]
         .mul(1e3)
