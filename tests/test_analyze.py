@@ -1,5 +1,6 @@
 import pandas as pd
-from picarro.read import MeasurementsConfig, read_raw, PicarroColumns
+from picarro.chunks import read_raw, PicarroColumns
+from picarro.measurements import MeasurementsConfig
 from picarro.analyze import FluxEstimationConfig, estimate_flux
 import pathlib
 import numpy as np
@@ -58,8 +59,8 @@ def test_fit_line_approximates_values():
 
     estimator = estimate_flux(linear_config, measurement)
 
-    assert isinstance(measurement.index, pd.DatetimeIndex)
-    times = measurement.index
+    assert isinstance(measurement.index, pd.DatetimeIndex)  # type: ignore
+    times = measurement.index  # type: ignore
     times_in_regression = times[
         (times >= estimator.moments.fit_start) & (times <= estimator.moments.fit_end)
     ]

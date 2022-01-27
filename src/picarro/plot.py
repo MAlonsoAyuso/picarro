@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from picarro.analyze import ESTIMATORS
 from picarro.analyze import AnalysisResult
-from picarro.read import Measurement
+from picarro.measurements import Measurement
 import pandas as pd
 
 with resources.path("picarro.resources", "matplotlib-style") as path:
-    mpl.style.use(path)
+    mpl.style.use(path)  # pyright: reportGeneralTypeIssues=false
 
 
 _SECONDS_PER_MINUTE = 60

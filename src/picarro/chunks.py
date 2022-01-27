@@ -1,22 +1,32 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
+from hashlib import sha256
 from os import PathLike
 from pathlib import Path
 from typing import (
+    Any,
     Iterable,
     Iterator,
     List,
+    Mapping,
     NewType,
     Optional,
-    cast,
     Union,
 )
 import logging
 from dataclasses import field
 import pandas as pd
+import json
+import cattr.preconf.json
 
 logger = logging.getLogger(__name__)
+
+_json_converter = cattr.preconf.json.make_converter()
+_json_converter.register_unstructure_hook(Path, str)
+_json_converter.register_structure_hook(Path, lambda v, _: Path(v))
+_json_converter.register_unstructure_hook(pd.Timestamp, str)
+_json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
 
 
 class InvalidRowHandling(Enum):
@@ -29,18 +39,6 @@ class ParsingConfig:
     columns: List[str] = field(default_factory=list)
     null_rows: InvalidRowHandling = InvalidRowHandling.skip
     epoch_time_column: str = "EPOCH_TIME"
-
-
-@dataclass(frozen=True)
-class StitchingConfig:
-    max_gap: pd.Timedelta = pd.Timedelta(10, "s")
-    min_duration: Optional[pd.Timedelta] = None
-    max_duration: Optional[pd.Timedelta] = None
-
-
-@dataclass(frozen=True)
-class MeasurementsConfig(ParsingConfig, StitchingConfig):
-    src: str = ""
 
 
 INDEX_NAME = "datetime_utc"
@@ -88,47 +86,7 @@ class PicarroColumns:
     nh3_conc_ave = "nh3_conc_ave"
 
 
-# DataFile: A DataFrame from a whole .dat file (after some basic parsing)
-# Chunk: A DataFrame with a contiguous subset of a DataFile,
-#   with exactly one solenoid valve value.
-# Measurement: A DataFrame possibly constructed from one or more chunks,
-#   hopefully corresponding to a whole measurement from start to end.
-DataFile = NewType("DataFile", pd.DataFrame)
-Chunk = NewType("Chunk", pd.DataFrame)
-Measurement = NewType("Measurement", pd.DataFrame)
-
 _DATETIME64_UNIT = "ms"
-
-
-@dataclass(frozen=True)
-class ChunkMeta:
-    path: Path
-    start: pd.Timestamp
-    end: pd.Timestamp
-    solenoid_valve: int
-    n_samples: int
-
-
-@dataclass
-class MeasurementMeta:
-    chunks: List[ChunkMeta]
-    start: pd.Timestamp
-    end: pd.Timestamp
-    solenoid_valve: int
-    n_samples: int
-
-    @staticmethod
-    def from_chunk_metas(chunk_metas: List[ChunkMeta]) -> MeasurementMeta:
-        solenoid_valves = {c.solenoid_valve for c in chunk_metas}
-        assert len(solenoid_valves) == 1, solenoid_valves
-        (solenoid_valve,) = solenoid_valves
-        return MeasurementMeta(
-            chunk_metas,
-            chunk_metas[0].start,
-            chunk_metas[-1].end,
-            solenoid_valve,
-            sum(c.n_samples for c in chunk_metas),
-        )
 
 
 class CannotParse(ValueError):
@@ -139,12 +97,22 @@ class InvalidData(CannotParse):
     pass
 
 
-_ALWAYS_READ_COLUMNS = [PicarroColumns.EPOCH_TIME, PicarroColumns.solenoid_valves]
+# ParsedFile: A DataFrame from a whole .dat file (after some basic parsing)
+ParsedFile = NewType("ParsedFile", pd.DataFrame)
+
+# Chunk: A DataFrame with a contiguous subset of a DataFile,
+#   with exactly one solenoid valve value.
+Chunk = NewType("Chunk", pd.DataFrame)
 
 
-def _get_columns_to_read(user_columns: List[str]) -> List[str]:
-    extra = [c for c in _ALWAYS_READ_COLUMNS if c not in set(user_columns)]
-    return user_columns + extra
+def read_raw(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
+    logger.info(f"read_raw {path}")
+    d = pd.read_csv(path, sep=r"\s+")
+    try:
+        d = _clean_raw_data(d, config)
+    except Exception as e:
+        raise CannotParse(f"{path}: {e}") from e
+    return ParsedFile(d)
 
 
 def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
@@ -165,7 +133,9 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
     row_has_null = d.isnull().any(axis=1)
     if row_has_null.any():
         if config.null_rows == InvalidRowHandling.error:
-            row_num = row_has_null.loc[lambda x: x].index[0]
+            row_num = row_has_null.loc[lambda x: x].index[
+                0
+            ]  # pyright: reportGeneralTypeIssues=false
             raise InvalidData(f"Missing value(s) in row {row_num}. {d.loc[row_num]}")
         elif config.null_rows == InvalidRowHandling.skip:
             n_violators = row_has_null.sum()
@@ -175,14 +145,12 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
     return d
 
 
-def read_raw(path: Union[PathLike, str], config: ParsingConfig) -> DataFile:
-    logger.info(f"read_raw {path}")
-    d = pd.read_csv(path, sep=r"\s+")
-    try:
-        d = _clean_raw_data(d, config)
-    except Exception as e:
-        raise CannotParse(f"{path}: {e}") from e
-    return cast(DataFile, d)
+_ALWAYS_READ_COLUMNS = [PicarroColumns.EPOCH_TIME, PicarroColumns.solenoid_valves]
+
+
+def _get_columns_to_read(user_columns: List[str]) -> List[str]:
+    extra = [c for c in _ALWAYS_READ_COLUMNS if c not in set(user_columns)]
+    return user_columns + extra
 
 
 def _reindex_timestamp(d):
@@ -201,25 +169,57 @@ def _reindex_timestamp(d):
         unit=_DATETIME64_UNIT,
     )
     if not timestamp.is_unique:
-        first_duplicate = timestamp.loc[timestamp.duplicated()].iloc[0]
+        first_duplicate = timestamp.loc[timestamp.duplicated()].iloc[
+            0
+        ]  # pyright: reportGeneralTypeIssues=false
         raise ValueError(f"non-unique timestamp {first_duplicate}")
     return d.set_index(timestamp)
 
 
-def iter_chunks(
-    path: Path, config: MeasurementsConfig
-) -> Iterator[tuple[ChunkMeta, Chunk]]:
-    logger.info(f"iter_chunks {path}")
-    d = read_raw(path, config)
+@dataclass(frozen=True)
+class ChunkMeta:
+    path: Path
+    start: pd.Timestamp
+    end: pd.Timestamp
+    solenoid_valve: int
+    n_samples: int
+
+
+def _split_file(src_path: Path, config: ParsingConfig) -> Iterator[Chunk]:
+    d = read_raw(src_path, config)
     d = d.pipe(_drop_data_between_valves)
     valve_just_changed = d[PicarroColumns.solenoid_valves].diff() != 0
     valve_change_count = valve_just_changed.cumsum()
     for i, chunk in d.groupby(valve_change_count):  # type: ignore
-        chunk_meta = _build_chunk_metadata(chunk, path)
-        yield chunk_meta, chunk
+        yield chunk
 
 
-def _drop_data_between_valves(data):
+def get_chunk_map(
+    src_path: Path, config: ParsingConfig, cache_dir: Optional[Path] = None
+) -> Mapping[ChunkMeta, Chunk]:
+    cache_path = _get_chunk_meta_path(src_path, cache_dir) if cache_dir else None
+
+    chunks = list(_split_file(src_path, config))
+    chunk_metas = [_build_chunk_meta(chunk, src_path) for chunk in chunks]
+    chunk_map = dict(zip(chunk_metas, chunks))
+
+    if cache_path:
+        _save_chunk_metas(cache_path, chunk_metas)
+
+    return chunk_map
+
+
+def get_chunk_metas(
+    src_path: Path, config: ParsingConfig, cache_dir: Optional[Path] = None
+) -> Iterable[ChunkMeta]:
+    cache_path = _get_chunk_meta_path(src_path, cache_dir) if cache_dir else None
+    if cache_path and cache_path.exists():
+        return _load_chunk_metas(cache_path)
+
+    return list(get_chunk_map(src_path, config, cache_dir))
+
+
+def _drop_data_between_valves(data: ParsedFile):
     # Column "solenoid_valves" is sometimes noninteger for a short time when switching
     # from one valve to the next. Let's drop these data as they cannot be connected
     # to a chamber.
@@ -228,7 +228,7 @@ def _drop_data_between_valves(data):
     return data[~is_between_valves].astype({PicarroColumns.solenoid_valves: int})
 
 
-def _build_chunk_metadata(chunk: Chunk, path: Path):
+def _build_chunk_meta(chunk: Chunk, path: Path) -> ChunkMeta:
     solenoid_valves = chunk[PicarroColumns.solenoid_valves].unique()
     assert len(solenoid_valves) == 1, solenoid_valves
     (the_valve,) = solenoid_valves
@@ -241,51 +241,25 @@ def _build_chunk_metadata(chunk: Chunk, path: Path):
     )
 
 
-def iter_measurement_metas(
-    chunks: Iterable[ChunkMeta], max_gap: pd.Timedelta
-) -> Iterator[MeasurementMeta]:
-    chunks = list(chunks)
-    chunks.sort(key=lambda c: c.start.to_numpy())
-
-    while chunks:
-        collected = [chunks.pop(0)]
-
-        while chunks:
-            prev_chunk = collected[-1]
-            candidate = chunks.pop(0)
-
-            time_gap = candidate.start - prev_chunk.end  # type: ignore
-            if time_gap < pd.Timedelta(0):
-                raise ValueError(f"overlapping chunks: {prev_chunk} {candidate}")
-
-            is_adjacent = time_gap < max_gap
-            same_valve = prev_chunk.solenoid_valve == candidate.solenoid_valve
-
-            if is_adjacent and same_valve:
-                collected.append(candidate)
-            else:
-                chunks.insert(0, candidate)
-                break
-
-        yield MeasurementMeta.from_chunk_metas(collected)
+def _save_chunk_metas(cache_path: Path, chunk_metas: List[ChunkMeta]):
+    cache_path.parent.mkdir(exist_ok=True, parents=True)
+    with open(cache_path, "w") as f:
+        json.dump(_json_converter.unstructure(chunk_metas), f, indent=2)
 
 
-def iter_measurements(
-    measurement_metas: Iterable[MeasurementMeta],
-    config: MeasurementsConfig,
-) -> Iterator[Measurement]:
-    read_cache = {}
+def _load_chunk_metas(cache_path: Path) -> list[ChunkMeta]:
+    with open(cache_path, "r") as f:
+        data = json.load(f)
+    return _json_converter.structure(data, List[ChunkMeta])
 
-    def read_file_into_cache(path: Path):
-        read_cache.update(iter_chunks(path, config))
 
-    def read_chunk(chunk_meta: ChunkMeta):
-        if chunk_meta not in read_cache:
-            read_file_into_cache(chunk_meta.path)
+def _get_chunk_meta_path(src_path: Path, cache_dir: Path) -> Path:
+    assert src_path.is_absolute(), src_path
+    file_name = f"{src_path.name}-{_repr_hash(src_path)}.json"
+    return cache_dir / file_name
 
-        chunk = read_cache[chunk_meta]
-        return chunk
 
-    for measurement_meta in measurement_metas:
-        measurement = pd.concat(list(map(read_chunk, measurement_meta.chunks)))
-        yield cast(Measurement, measurement)
+def _repr_hash(obj: Any) -> str:
+    m = sha256()
+    m.update(repr(obj).encode())
+    return m.hexdigest()

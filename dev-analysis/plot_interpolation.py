@@ -1,7 +1,7 @@
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-from picarro.read import read_raw
+from picarro.chunks import read_raw
 from example_data import data_path
 
 

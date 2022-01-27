@@ -11,9 +11,11 @@ from picarro.config import (
     FluxEstimationConfig,
     OutputConfig,
 )
-from picarro.read import MeasurementMeta, MeasurementsConfig, PicarroColumns
+from picarro.measurements import MeasurementMeta, MeasurementsConfig
 import numpy as np
 import pandas as pd
+
+from picarro.chunks import PicarroColumns
 
 config_example_src = Path(__file__).absolute().parent / "config_example.toml"
 assert config_example_src.exists()
@@ -101,7 +103,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         # Check that measurement metadata objects are as expected
         measurement_summaries = [
             summarize_measurement(mm)
-            for mm in picarro.app.iter_measurement_metas(app_config)
+            for mm in picarro.app._iter_measurement_metas(app_config)
         ]
 
         assert measurement_summaries == expected_summaries
@@ -122,7 +124,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     @call_immediately
     def test_analysis_working():
         # Test analysis
-        analysis_results = list(picarro.app.iter_analysis_results(app_config))
+        analysis_results = list(picarro.app._iter_analysis_results(app_config))
         expected_analysis_results = list(
             itertools.product(
                 expected_summaries, app_config.user.flux_estimation.columns
@@ -144,4 +146,6 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
             data = pd.read_csv(path, index_col="datetime_utc")
             assert list(data.columns) == app_config.user.measurements.columns
             assert len(data) == summary["n_samples"]
-            assert str(data[PicarroColumns.solenoid_valves].dtype).startswith("int")
+            assert str(data[PicarroColumns.solenoid_valves].dtype).startswith(
+                "int"
+            )  # pyright: reportGeneralTypeIssues=false

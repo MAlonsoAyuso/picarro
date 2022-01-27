@@ -1,4 +1,4 @@
-from picarro.read import PicarroColumns, read_raw
+from picarro.chunks import PicarroColumns, read_raw
 from picarro.plot import plot_measurement
 from picarro.analyze import fit_exponential, fit_line
 from example_data import data_path

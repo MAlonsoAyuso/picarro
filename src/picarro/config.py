@@ -12,7 +12,7 @@ import pandas as pd
 import logging
 from picarro.analyze import FluxEstimationConfig
 from picarro.logging import DEFAULT_LOG_SETTINGS, LogSettingsDict
-from picarro.read import MeasurementsConfig
+from picarro.measurements import MeasurementsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -47,11 +47,6 @@ class AppPaths:
     out_fluxes: Path
     out_plot_fluxes: Path
 
-    def cache_chunk_meta(self, data_file_path: Path) -> Path:
-        assert data_file_path.is_absolute(), data_file_path
-        file_name = f"{data_file_path.name}-{_repr_hash(data_file_path)}.json"
-        return self.cache_chunks / file_name
-
     @staticmethod
     def create(base_dir: Path, out_dir: Path) -> AppPaths:
         assert base_dir.is_absolute()
@@ -67,12 +62,6 @@ class AppPaths:
             out_fluxes=out / "fluxes.csv",
             out_plot_fluxes=out_plot / "fluxes",
         )
-
-
-def _repr_hash(obj: Any) -> str:
-    m = sha256()
-    m.update(repr(obj).encode())
-    return m.hexdigest()
 
 
 @dataclass(frozen=True)

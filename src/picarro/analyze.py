@@ -5,7 +5,7 @@ import datetime
 import pandas as pd
 import numpy as np
 import scipy.stats
-from picarro.read import MeasurementMeta
+from picarro.measurements import MeasurementMeta
 from math import isnan
 import logging
 

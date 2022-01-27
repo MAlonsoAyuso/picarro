@@ -12,6 +12,7 @@
   - Allow list of globs for src
   - Use relative paths in chunk mapping (or absolute if user so specifies)
     - No cache invalidation when simply moving data within computer or to other
+  - Use ParsingConfig to determine chunk meta cache dir
 - Add species selection to measurement mapping
 - Generalize from solenoid_valves to any variable of choice
 
