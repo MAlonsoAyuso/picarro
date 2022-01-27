@@ -63,10 +63,6 @@ class _FluxEstimatorBase:
     @classmethod
     def create(cls, data: TimeSeries, config: FluxEstimationConfig):
         column = data.name
-        if not column in config.volume_prefixes:
-            raise ValueError(
-                f"missing column {column} in volume_prefixes {config.volume_prefixes}"
-            )
         assert isinstance(column, str)
         fit_params, moments, n_samples = cls._fit(data, config)
         assert isinstance(data.index, pd.DatetimeIndex)
@@ -137,10 +133,7 @@ class LinearEstimator(_FluxEstimatorBase):
         seconds_elapsed = (fit_midpoint - self.moments.t0).total_seconds()
         h = self.config.V / self.config.A
         tau = self.config.V / self.config.Q
-        volume_prefix = self.config.volume_prefixes[self.column]
-        vol_flux = (
-            h * np.exp(seconds_elapsed / tau) * self.fit_params.slope * volume_prefix
-        )
+        vol_flux = h * np.exp(seconds_elapsed / tau) * self.fit_params.slope
         return vol_flux
 
 
@@ -165,8 +158,7 @@ class ExponentialEstimator(_FluxEstimatorBase):
         # equal to the derivative at the midpoint of the exponential fit.
         h = self.config.V / self.config.A
         tau = self.config.V / self.config.Q
-        volume_prefix = self.config.volume_prefixes[self.column]
-        vol_flux = h / tau * self.fit_params.slope * volume_prefix
+        vol_flux = h / tau * self.fit_params.slope
         return float(vol_flux)
 
 

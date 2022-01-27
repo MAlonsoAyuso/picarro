@@ -92,13 +92,6 @@ class ReadConfig(ParsingConfig, MeasurementConfig):
     src: str = ""
 
 
-_VOLUME_UNITS = {
-    "N2O": 1e-6,
-    "CH4": 1e-6,
-    "CO2": 1e-6,
-}
-
-
 @dataclass(frozen=True)
 class FluxEstimationConfig:
     method: str
@@ -108,7 +101,6 @@ class FluxEstimationConfig:
     A: float
     Q: float
     V: float
-    volume_prefixes: Dict[str, float] = field(default_factory=_VOLUME_UNITS.copy)
 
 
 @dataclass(frozen=True)

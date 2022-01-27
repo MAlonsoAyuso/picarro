@@ -99,9 +99,8 @@ def test_estimate_N2O_vol_flux_right_order_of_magnitude():
     ).total_seconds()
     tau = linear_config.V / linear_config.Q
     h = linear_config.V / linear_config.A
-    ppm = 1e-6
     correction_factor = np.exp(elapsed_time_at_mid_of_fit / tau)
-    expected_result = h * slope * correction_factor * ppm
+    expected_result = h * slope * correction_factor
 
     assert abs_rel_diff(vol_flux, expected_result) < 0.001  # m/s
 
