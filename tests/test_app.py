@@ -103,7 +103,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         # Check that measurement metadata objects are as expected
         measurement_summaries = [
             summarize_measurement(mm)
-            for mm in picarro.app._iter_measurement_metas(app_config)
+            for mm in picarro.app.iter_measurement_metas(app_config)
         ]
 
         assert measurement_summaries == expected_summaries

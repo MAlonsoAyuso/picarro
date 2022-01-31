@@ -1,3 +1,4 @@
+from email.policy import default
 from pathlib import Path
 import click
 import picarro.config
@@ -24,7 +25,23 @@ def cli(ctx: click.Context, config: Path):
 
 @cli.command()
 @click.pass_context
-def export_measurements(ctx: click.Context):
+def chunks(ctx: click.Context):
+    config = ctx.obj["config"]
+    assert isinstance(config, picarro.config.AppConfig), config
+    mms = list(picarro.app.iter_measurement_metas(config))
+    chunks = {chunk for mm in mms for chunk in mm.chunks}
+    paths = {chunk.path for chunk in chunks}
+    summary = (
+        f"{len(mms)} measurement(s) "
+        f"from {len(chunks)} chunk(s) "
+        f"in {len(paths)} file(s)"
+    )
+    logger.info(summary)
+
+
+@cli.command()
+@click.pass_context
+def measurements(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, picarro.config.AppConfig), config
     picarro.app.export_measurements(config)
@@ -32,7 +49,7 @@ def export_measurements(ctx: click.Context):
 
 @cli.command()
 @click.pass_context
-def export_fluxes(ctx: click.Context):
+def fluxes(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, picarro.config.AppConfig), config
     picarro.app.export_fluxes(config)
@@ -40,7 +57,7 @@ def export_fluxes(ctx: click.Context):
 
 @cli.command()
 @click.pass_context
-def plot_fluxes(ctx: click.Context):
+def plots(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, picarro.config.AppConfig), config
     picarro.app.plot_fluxes(config)

@@ -3,9 +3,8 @@ import glob
 import itertools
 import os
 from pathlib import Path
-from typing import Any, Iterator, List
+from typing import Iterator
 import functools
-from picarro import measurements
 from picarro.analyze import AnalysisResult, estimate_flux
 from picarro.config import AppConfig
 from picarro.measurements import Measurement, MeasurementMeta
@@ -82,7 +81,7 @@ def setup_logging(config: AppConfig):
 def _iter_measurement_pairs(
     config: AppConfig,
 ) -> Iterator[tuple[MeasurementMeta, Measurement]]:
-    mms_1, mms_2 = itertools.tee(_iter_measurement_metas(config))
+    mms_1, mms_2 = itertools.tee(iter_measurement_metas(config))
     return zip(
         mms_1, picarro.measurements.read_measurements(mms_2, config.user.measurements)
     )
@@ -109,7 +108,7 @@ def _iter_all_chunk_metas(config: AppConfig) -> Iterator[ChunkMeta]:
     logger.info(f"Read {chunk_count} chunks from {file_count} files.")
 
 
-def _iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:
+def iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:
     chunk_metas = _iter_all_chunk_metas(config)
     return picarro.measurements.stitch_chunk_metas(
         chunk_metas, config.user.measurements
