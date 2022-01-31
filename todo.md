@@ -13,6 +13,9 @@
   - Use relative paths in chunk mapping (or absolute if user so specifies)
     - No cache invalidation when simply moving data within computer or to other
   - Use ParsingConfig to determine chunk meta cache dir
+  - Let measurements.columns be the list that is exported; check that it is a superset of the columns to be analyzed and/or plotted; and determine the full list to be read as measurements.columns + whatever needed for timestamps, alarms, valves, ...
+  - Check for gaps within files too; cut chunks already when reading file?
+- Make overview figure of all files?
 - Add species selection to measurement mapping
 - Generalize from solenoid_valves to any variable of choice
 
