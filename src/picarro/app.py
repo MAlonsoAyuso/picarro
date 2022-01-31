@@ -36,11 +36,14 @@ def log_unhandled_exceptions(func):
 def export_measurements(config: AppConfig):
     claim_outdir(config)
     config.paths.out_measurements.mkdir(exist_ok=True)
+    count = 0
     for measurement in iter_measurements(config):
+        count += 1
         filename_stem = _build_measurement_filename_stem(measurement)
         out_path = config.paths.out_measurements / f"{filename_stem}.csv"
-        logger.info(f"Writing measurement to file {out_path}.")
+        logger.debug(f"Writing measurement to file {out_path}.")
         measurement[config.user.measurements.columns].to_csv(out_path)
+    logger.info(f"Wrote {count} measurements to files.")
 
 
 @log_unhandled_exceptions
@@ -49,13 +52,16 @@ def export_fluxes(config: AppConfig):
     config.paths.out_measurements.mkdir(exist_ok=True)
     data = _get_fluxes_dataframe(config)
     data.to_csv(config.paths.out_fluxes, index=False)
+    logger.info(f"Wrote fluxes from {len(data)} measurements.")
 
 
 @log_unhandled_exceptions
 def plot_fluxes(config: AppConfig):
     claim_outdir(config)
     analysis_results = list(_iter_analysis_results(config))
+    count = 0
     for measurement in iter_measurements(config):
+        count += 1
         fig = picarro.plot.plot_measurement(
             measurement, config.user.flux_estimation.columns, analysis_results
         )
@@ -63,6 +69,7 @@ def plot_fluxes(config: AppConfig):
         path = config.paths.out_plot_fluxes / file_name
         path.parent.mkdir(exist_ok=True, parents=True)
         fig.savefig(path)
+    logger.info(f"Plotted {count} measurements.")
 
 
 def setup_logging(config: AppConfig):
@@ -89,10 +96,17 @@ def iter_measurements(config: AppConfig) -> Iterator[Measurement]:
 def _iter_all_chunk_metas(config: AppConfig) -> Iterator[ChunkMeta]:
     claim_outdir(config)
     file_paths = _glob_recursive_in_dir(config.user.measurements.src, config.base_dir)
+
+    file_count = 0
+    chunk_count = 0
     for path in file_paths:
-        yield from get_chunk_metas(
+        file_count += 1
+        for chunk in get_chunk_metas(
             path, config.user.measurements, cache_dir=config.paths.cache_chunks
-        )
+        ):
+            chunk_count += 1
+            yield chunk
+    logger.info(f"Read {chunk_count} chunks from {file_count} files.")
 
 
 def _iter_measurement_metas(config: AppConfig) -> Iterator[MeasurementMeta]:

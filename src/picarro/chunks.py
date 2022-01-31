@@ -106,7 +106,7 @@ Chunk = NewType("Chunk", pd.DataFrame)
 
 
 def read_raw(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
-    logger.info(f"read_raw {path}")
+    logger.debug(f"read_raw {path}")
     d = pd.read_csv(path, sep=r"\s+")
     try:
         d = _clean_raw_data(d, config)

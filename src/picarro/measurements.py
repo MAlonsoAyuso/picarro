@@ -96,18 +96,21 @@ def stitch_chunk_metas(
         duration = measurement_meta.end - measurement_meta.start  # type: ignore
         min_duration = config.min_duration
         max_duration = config.max_duration
-        if min_duration and duration < min_duration:
+        if (min_duration and duration < min_duration) or (
+            max_duration and max_duration < duration
+        ):
             logger.warning(
-                f"Skipping measurement {measurement_meta} because duration "
-                f"{duration} < {min_duration}"
+                f"Skipping measurement at {measurement_meta.start:%Y-%m-%d %H:%M:%S} "
+                f"with duration {duration}."
+            )
+            logger.debug(
+                f"Skipping measurement {measurement_meta}. "
+                f"duration={duration}; "
+                f"min_duration={min_duration}; "
+                f"max_duration={max_duration}"
             )
             continue
-        if max_duration and max_duration < duration:
-            logger.warning(
-                f"Skipping measurement {measurement_meta} because duration "
-                f"{duration} > {max_duration}"
-            )
-            continue
+
         yield measurement_meta
 
 

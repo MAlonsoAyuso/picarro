@@ -19,7 +19,7 @@ DEFAULT_LOG_SETTINGS = {
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "level": "WARNING",
+            "level": "INFO",
             "formatter": "brief",
             "filters": ["allow_picarro"],
         },
