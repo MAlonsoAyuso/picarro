@@ -6,23 +6,31 @@ LogSettingsDict = Dict[str, Any]
 
 DEFAULT_LOG_SETTINGS = {
     "formatters": {
-        "picarro_default": {
-            "format": "%(asctime)s %(levelname)-8s %(name)-18s %(message)s",
-        }
+        "detailed": {
+            "format": "%(asctime)s %(levelname)-8s %(name)-22s %(message)s",
+        },
+        "brief": {
+            "format": "%(levelname)-8s %(message)s",
+        },
+    },
+    "filters": {
+        "allow_picarro": {"name": "picarro"},
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "level": "INFO",
-            "formatter": "picarro_default",
+            "level": "WARNING",
+            "formatter": "brief",
+            "filters": ["allow_picarro"],
         },
         "file": {
             "class": "logging.handlers.RotatingFileHandler",
-            "level": "INFO",
+            "level": "DEBUG",
             "filename": "log.txt",
-            "formatter": "picarro_default",
+            "formatter": "detailed",
             "maxBytes": 1e6,
-            "backupCount": 2,
+            "backupCount": 5,
+            "filters": ["allow_picarro"],
         },
     },
     "root": {
