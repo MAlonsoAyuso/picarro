@@ -1,20 +1,15 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, NewType, Optional
+from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple
 import pandas as pd
-import itertools
 from picarro.chunks import (
     Chunk,
     ChunkMeta,
     ParsingConfig,
-    get_chunk_map,
-    get_chunk_metas,
-    _split_file,
+    read_chunks,
 )
 import logging
-import os
-import glob
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +19,9 @@ logger = logging.getLogger(__name__)
 Measurement = NewType("Measurement", pd.DataFrame)
 
 
-@dataclass
+@dataclass(frozen=True)
 class MeasurementMeta:
-    chunks: List[ChunkMeta]
+    chunks: Tuple[ChunkMeta, ...]
     start: pd.Timestamp
     end: pd.Timestamp
     solenoid_valve: int
@@ -38,7 +33,7 @@ class MeasurementMeta:
         assert len(solenoid_valves) == 1, solenoid_valves
         (solenoid_valve,) = solenoid_valves
         return MeasurementMeta(
-            chunk_metas,
+            tuple(chunk_metas),
             chunk_metas[0].start,
             chunk_metas[-1].end,
             solenoid_valve,
@@ -46,14 +41,14 @@ class MeasurementMeta:
         )
 
 
-@dataclass(frozen=True)
+@dataclass
 class StitchingConfig:
     max_gap: pd.Timedelta = pd.Timedelta(10, "s")
     min_duration: Optional[pd.Timedelta] = None
     max_duration: Optional[pd.Timedelta] = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class MeasurementsConfig(ParsingConfig, StitchingConfig):
     src: str = ""
 
@@ -83,6 +78,7 @@ def _stitch_chunks(
             else:
                 chunk_metas.insert(0, candidate)
                 break
+
 
         yield MeasurementMeta.from_chunk_metas(collected)
 
@@ -122,7 +118,7 @@ def read_measurements(
 
     def read_chunks_into_cache(path: Path):
         read_cache.clear()
-        read_cache.update(get_chunk_map(path, config))
+        read_cache.update(read_chunks(path, config))
 
     def read_chunk(chunk_meta: ChunkMeta):
         if chunk_meta not in read_cache:
@@ -131,4 +127,7 @@ def read_measurements(
 
     for measurement_meta in measurement_metas:
         measurement = pd.concat(list(map(read_chunk, measurement_meta.chunks)))
+        debug_info = (measurement_meta, measurement.index)
+        assert measurement_meta.start == measurement.index[0], debug_info
+        assert measurement_meta.end == measurement.index[-1], debug_info
         yield Measurement(measurement)

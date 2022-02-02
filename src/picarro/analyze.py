@@ -16,39 +16,23 @@ VolumetricFlux = float
 TimeSeries = pd.Series
 
 
-@dataclass(frozen=True)
+@dataclass
 class FluxEstimationConfig:
     method: str
     columns: List[str]
     t0_delay: pd.Timedelta
     t0_margin: pd.Timedelta
-    A: float = float("nan")
-    Q: float = float("nan")
-    V: float = float("nan")
-    tau: float = float("nan")
-    h: float = float("nan")
+    A: float
+    V: float
+    Q: float
 
-    def __post_init__(self):
-        if isnan(self.tau):
-            if isnan(self.V) or isnan(self.Q):
-                raise ValueError("Must specify tau or (V, Q)")
-            object.__setattr__(self, "tau", self.V / self.Q)
-            logger.debug(f"calculated tau = V / Q = {self.V} / {self.Q} = {self.tau}")
-        else:
-            if not (isnan(self.V) or isnan(self.Q)):
-                raise ValueError("Must specify tau or (V, Q), not all three")
+    @property
+    def tau(self) -> float:
+        return self.V / self.Q
 
-        if isnan(self.h):
-            if isnan(self.V) or isnan(self.A):
-                raise ValueError("Must specify h or (V, A)")
-            object.__setattr__(self, "h", self.V / self.A)
-            logger.debug(f"calculated h = V / A = {self.V} / {self.A} = {self.h}")
-        else:
-            if not (isnan(self.V) or isnan(self.A)):
-                raise ValueError("Must specify h or (V, A), not all three")
-
-        assert not isnan(self.tau)
-        assert not isnan(self.h)
+    @property
+    def h(self) -> float:
+        return self.V / self.A
 
 
 @dataclass
@@ -115,7 +99,7 @@ class _FluxEstimatorBase:
         assert isinstance(data_to_fit.index, pd.DatetimeIndex)
         assert len(data_to_fit), (data, moments)
         x = cls.transform_time(data_to_fit.index, config, moments)
-        y = data_to_fit.to_numpy()
+        y = data_to_fit.to_numpy()  # type: ignore
         result = scipy.stats.linregress(x, y)
         fit_params = LinearFit(
             intercept=result.intercept,  # type: ignore

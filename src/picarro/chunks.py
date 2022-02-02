@@ -1,32 +1,37 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
-from hashlib import sha256
 from os import PathLike
 from pathlib import Path
 from typing import (
-    Any,
-    Iterable,
     Iterator,
     List,
     Mapping,
     NewType,
-    Optional,
     Union,
 )
 import logging
 from dataclasses import field
 import pandas as pd
-import json
-import cattr.preconf.json
 
 logger = logging.getLogger(__name__)
 
-_json_converter = cattr.preconf.json.make_converter()
-_json_converter.register_unstructure_hook(Path, str)
-_json_converter.register_structure_hook(Path, lambda v, _: Path(v))
-_json_converter.register_unstructure_hook(pd.Timestamp, str)
-_json_converter.register_structure_hook(pd.Timestamp, lambda v, _: pd.Timestamp(v))
+
+@dataclass(frozen=True)
+class ChunkMeta:
+    path: Path
+    start: pd.Timestamp
+    end: pd.Timestamp
+    solenoid_valve: int
+    n_samples: int
+
+
+def read_chunks(src_path: Path, config: ParsingConfig) -> Mapping[ChunkMeta, Chunk]:
+    chunks = list(_split_file(src_path, config))
+    chunk_metas = [_build_chunk_meta(chunk, src_path) for chunk in chunks]
+    chunk_map = dict(zip(chunk_metas, chunks))
+    logger.debug(f"Read {len(chunk_map)} chunks from {src_path}")
+    return chunk_map
 
 
 class InvalidRowHandling(Enum):
@@ -34,7 +39,7 @@ class InvalidRowHandling(Enum):
     error = "error"
 
 
-@dataclass(frozen=True)
+@dataclass
 class ParsingConfig:
     columns: List[str] = field(default_factory=list)
     null_rows: InvalidRowHandling = InvalidRowHandling.skip
@@ -105,8 +110,8 @@ ParsedFile = NewType("ParsedFile", pd.DataFrame)
 Chunk = NewType("Chunk", pd.DataFrame)
 
 
-def read_raw(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
-    logger.debug(f"read_raw {path}")
+def _read_file(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
+    logger.debug(f"Reading file {path}")
     d = pd.read_csv(path, sep=r"\s+")
     try:
         d = _clean_raw_data(d, config)
@@ -176,47 +181,13 @@ def _reindex_timestamp(d):
     return d.set_index(timestamp)
 
 
-@dataclass(frozen=True)
-class ChunkMeta:
-    path: Path
-    start: pd.Timestamp
-    end: pd.Timestamp
-    solenoid_valve: int
-    n_samples: int
-
-
 def _split_file(src_path: Path, config: ParsingConfig) -> Iterator[Chunk]:
-    d = read_raw(src_path, config)
+    d = _read_file(src_path, config)
     d = d.pipe(_drop_data_between_valves)
     valve_just_changed = d[PicarroColumns.solenoid_valves].diff() != 0
     valve_change_count = valve_just_changed.cumsum()
     for i, chunk in d.groupby(valve_change_count):  # type: ignore
         yield chunk
-
-
-def get_chunk_map(
-    src_path: Path, config: ParsingConfig, cache_dir: Optional[Path] = None
-) -> Mapping[ChunkMeta, Chunk]:
-    cache_path = _get_chunk_meta_path(src_path, cache_dir) if cache_dir else None
-
-    chunks = list(_split_file(src_path, config))
-    chunk_metas = [_build_chunk_meta(chunk, src_path) for chunk in chunks]
-    chunk_map = dict(zip(chunk_metas, chunks))
-
-    if cache_path:
-        _save_chunk_metas(cache_path, chunk_metas)
-
-    return chunk_map
-
-
-def get_chunk_metas(
-    src_path: Path, config: ParsingConfig, cache_dir: Optional[Path] = None
-) -> Iterable[ChunkMeta]:
-    cache_path = _get_chunk_meta_path(src_path, cache_dir) if cache_dir else None
-    if cache_path and cache_path.exists():
-        return _load_chunk_metas(cache_path)
-
-    return list(get_chunk_map(src_path, config, cache_dir))
 
 
 def _drop_data_between_valves(data: ParsedFile):
@@ -239,27 +210,3 @@ def _build_chunk_meta(chunk: Chunk, path: Path) -> ChunkMeta:
         int(the_valve),
         len(chunk),
     )
-
-
-def _save_chunk_metas(cache_path: Path, chunk_metas: List[ChunkMeta]):
-    cache_path.parent.mkdir(exist_ok=True, parents=True)
-    with open(cache_path, "w") as f:
-        json.dump(_json_converter.unstructure(chunk_metas), f, indent=2)
-
-
-def _load_chunk_metas(cache_path: Path) -> list[ChunkMeta]:
-    with open(cache_path, "r") as f:
-        data = json.load(f)
-    return _json_converter.structure(data, List[ChunkMeta])
-
-
-def _get_chunk_meta_path(src_path: Path, cache_dir: Path) -> Path:
-    assert src_path.is_absolute(), src_path
-    file_name = f"{src_path.name}-{_repr_hash(src_path)}.json"
-    return cache_dir / file_name
-
-
-def _repr_hash(obj: Any) -> str:
-    m = sha256()
-    m.update(repr(obj).encode())
-    return m.hexdigest()

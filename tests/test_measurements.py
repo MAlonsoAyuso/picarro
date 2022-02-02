@@ -5,7 +5,7 @@ from picarro.measurements import (
     read_measurements,
     stitch_chunk_metas,
 )
-from picarro.chunks import PicarroColumns, get_chunk_map
+from picarro.chunks import PicarroColumns, read_chunks
 from pathlib import Path
 import pandas as pd
 
@@ -66,7 +66,7 @@ def test_dont_join_chunks_if_time_gap_is_too_large():
 def _test_measurements_and_summaries_correct(
     paths: list[Path], config: MeasurementsConfig, expected_summaries: list[dict]
 ):
-    chunk_metas = itertools.chain(*(get_chunk_map(path, config) for path in paths))
+    chunk_metas = itertools.chain(*(read_chunks(path, config) for path in paths))
     measurement_metas = list(stitch_chunk_metas(chunk_metas, config))
 
     meta_summaries = [

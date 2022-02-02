@@ -7,11 +7,11 @@ import pytest
 import picarro.app
 from picarro.config import (
     AppConfig,
-    UserConfig,
     FluxEstimationConfig,
-    OutputConfig,
+    OutItem,
 )
 from picarro.measurements import MeasurementMeta, MeasurementsConfig
+import picarro.measurements
 import numpy as np
 import pandas as pd
 
@@ -31,30 +31,27 @@ def abs_rel_diff(a, b):
 def app_config(tmp_path: Path) -> AppConfig:
     config_path = tmp_path / "config-filename-stem.toml"
     shutil.copyfile(config_example_src, config_path)
+    os.chdir(config_path.parent)
     return AppConfig.from_toml(config_path)
 
 
 def test_create_config(app_config: AppConfig, tmp_path: Path):
-    expected_conf = AppConfig.create(
-        base_dir=tmp_path,
-        user_config=UserConfig(
-            MeasurementsConfig(
-                src="data-dir/**/*.dat",
-                columns=["N2O", "CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
-                max_gap=pd.Timedelta(5, "s"),
-                min_duration=pd.Timedelta(1080, "s"),
-                max_duration=None,
-            ),
-            FluxEstimationConfig(
-                columns=["N2O", "CH4"],
-                method="linear",
-                t0_delay=pd.Timedelta(480, "s"),
-                t0_margin=pd.Timedelta(120, "s"),
-                A=0.25,
-                Q=4.16e-6,
-                V=50e-3,
-            ),
-            OutputConfig(),
+    expected_conf = AppConfig(
+        measurements=MeasurementsConfig(
+            src="data-dir/**/*.dat",
+            columns=["N2O", "CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
+            max_gap=pd.Timedelta(5, "s"),
+            min_duration=pd.Timedelta(1080, "s"),
+            max_duration=None,
+        ),
+        flux_estimation=FluxEstimationConfig(
+            columns=["N2O", "CH4"],
+            method="linear",
+            t0_delay=pd.Timedelta(480, "s"),
+            t0_margin=pd.Timedelta(120, "s"),
+            A=0.25,
+            Q=4.16e-6,
+            V=50e-3,
         ),
     )
 
@@ -75,15 +72,14 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
 
     @call_immediately
     def test_will_not_overwrite():
-        # Test that it won't do anything if there is a non-empty out directory
-        # without a marker file
-        out_dir = app_config.paths.out
+        # Test that it won't do anything if the output path already exists
+        out_path = app_config.output.get_path(OutItem.measurement_metas_json)
+        out_dir = out_path.parent
         out_dir.mkdir()
-        blocking_file_path = out_dir / "file"
-        blocking_file_path.touch()
-        with pytest.raises(FileExistsError):
-            list(picarro.app.iter_measurements(app_config))
-        os.remove(blocking_file_path)
+        out_path.touch()
+        with pytest.raises(picarro.app.PicarroPathExists):
+            picarro.app.identify_measurements(app_config)
+        os.remove(out_path)
 
     # These were established by manually sifting through the files
     expected_summaries = [
@@ -98,12 +94,14 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         # one removed here compared to the full set, because it's too short
     ]
 
+    picarro.app.identify_measurements(app_config)
+
     @call_immediately
     def test_measurement_metadata():
         # Check that measurement metadata objects are as expected
         measurement_summaries = [
             summarize_measurement(mm)
-            for mm in picarro.app.iter_measurement_metas(app_config)
+            for mm in picarro.app.load_measurement_metas(app_config)
         ]
 
         assert measurement_summaries == expected_summaries
@@ -111,12 +109,16 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     @call_immediately
     def test_measurement_data():
         # Check that measurement datasets are as expected
+        measurements = picarro.measurements.read_measurements(
+            picarro.app.load_measurement_metas(app_config),
+            app_config.measurements,
+        )
         data_summaries = [
             dict(
                 solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
                 n_samples=len(m),
             )
-            for m in picarro.app.iter_measurements(app_config)
+            for m in measurements
         ]
 
         assert data_summaries == expected_summaries
@@ -124,10 +126,10 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     @call_immediately
     def test_analysis_working():
         # Test analysis
-        analysis_results = list(picarro.app._iter_analysis_results(app_config))
+        analysis_results = list(picarro.app._analyze_fluxes(app_config))
         expected_analysis_results = list(
             itertools.product(
-                expected_summaries, app_config.user.flux_estimation.columns
+                expected_summaries, app_config.flux_estimation.columns
             )
         )
         seen_analysis_results = [
@@ -140,11 +142,11 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     def test_export_measurement_data():
         # Test exporting measurements
         picarro.app.export_measurements(app_config)
-        paths = list(app_config.paths.out_measurements.iterdir())
+        paths = list(app_config.output.get_path(OutItem.measurements_dir).iterdir())
         assert len(paths) == len(expected_summaries)
         for path, summary in zip(sorted(paths), expected_summaries):
             data = pd.read_csv(path, index_col="datetime_utc")
-            assert list(data.columns) == app_config.user.measurements.columns
+            assert list(data.columns) == app_config.measurements.columns
             assert len(data) == summary["n_samples"]
             assert str(data[PicarroColumns.solenoid_valves].dtype).startswith(
                 "int"

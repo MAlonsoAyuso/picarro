@@ -26,3 +26,5 @@
 - Deal with time adjustments? If the Picarro computer has the wrong time setting, it could be nice to be able to apply an offset
 - Allow different output formats (csv, hdf, ...)
 - Generalize solenoid_valve as indicator of source
+- Check goodness-of-fit and warn about bad fit?
+- Allow multiple fit methods?

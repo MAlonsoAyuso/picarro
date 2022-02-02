@@ -4,8 +4,8 @@ import pytest
 from picarro.config import MeasurementsConfig
 from picarro.chunks import (
     ChunkMeta,
-    get_chunk_map,
-    read_raw,
+    read_chunks,
+    _read_file,
     PicarroColumns,
 )
 from pathlib import Path
@@ -28,16 +28,16 @@ CONFIG = MeasurementsConfig(
 
 
 def test_read_raw():
-    read_raw(data_path("example.dat"), CONFIG)
+    _read_file(data_path("example.dat"), CONFIG)
 
 
 def test_require_unique_timestamps():
     with pytest.raises(ValueError):
-        read_raw(data_path("duplicate_timestamp.dat"), CONFIG)
+        _read_file(data_path("duplicate_timestamp.dat"), CONFIG)
 
 
 def test_chunks_have_unique_int_solenoid_valves():
-    for chunk_meta, chunk in get_chunk_map(data_path("example.dat"), CONFIG).items():
+    for chunk_meta, chunk in read_chunks(data_path("example.dat"), CONFIG).items():
         solenoid_valves = chunk[PicarroColumns.solenoid_valves]
         assert solenoid_valves.dtype == int  # type: ignore
         assert len(solenoid_valves.unique()) == 1
@@ -71,5 +71,5 @@ def test_chunk_metadata_is_correct():
         ),
     ]
 
-    chunk_metas = list(get_chunk_map(path, CONFIG))
+    chunk_metas = list(read_chunks(path, CONFIG))
     assert expected_chunk_metas == list(chunk_metas)
