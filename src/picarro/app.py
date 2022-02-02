@@ -40,6 +40,10 @@ _json_converter.register_structure_hook(
 )
 
 
+class ConfigError(FileExistsError):
+    pass
+
+
 class PicarroPathExists(FileExistsError):
     pass
 
@@ -121,6 +125,8 @@ def export_measurements(config: AppConfig):
 
 
 def estimate_fluxes(config: AppConfig):
+    if not config.flux_estimation:
+        raise ConfigError("No flux estimation config specified.")
     path = _prepare_write_path(config, OutItem.fluxes_json)
     analysis_results = list(_analyze_fluxes(config))
     columns = {ar.estimator.column for ar in analysis_results}

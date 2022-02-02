@@ -8,7 +8,6 @@
 - Make parser crash with a nicer message about which file went wrong
 - Check for infinite value in drop_data_between_valves
 - Minor things
-  - Make flux estimation config optional
   - Allow list of globs for src
   - Use relative paths in chunk mapping (or absolute if user so specifies)
     - No cache invalidation when simply moving data within computer or to other

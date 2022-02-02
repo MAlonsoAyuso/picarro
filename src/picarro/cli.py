@@ -24,6 +24,10 @@ def handle_exceptions(func):
             raise click.ClickException(
                 f"Already exists: {e}. Use --force to overwrite."
             )
+        except picarro.app.ConfigError as e:
+            raise click.ClickException(
+                f"There is a problem with the config: {e}"
+            )
         except Exception as e:
             logger.exception(f"Unhandled exception: {e}")
             raise click.ClickException(f"Crashed due to an unhandled exception: {e}")

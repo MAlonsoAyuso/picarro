@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import (
     Any,
     Dict,
+    Optional,
 )
 import toml
 import cattr.preconf.tomlkit
@@ -55,7 +56,7 @@ class OutputConfig:
 @dataclass
 class AppConfig:
     measurements: MeasurementsConfig
-    flux_estimation: FluxEstimationConfig
+    flux_estimation: Optional[FluxEstimationConfig] = None
     output: OutputConfig = field(default_factory=OutputConfig)
     logging: LogSettingsDict = field(default_factory=lambda: DEFAULT_LOG_SETTINGS)
 
