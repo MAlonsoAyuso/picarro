@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
 import pandas as pd
 from picarro.chunks import (
     Chunk,
@@ -48,10 +48,6 @@ class StitchingConfig:
     max_duration: Optional[pd.Timedelta] = None
 
 
-@dataclass
-class MeasurementsConfig(ParsingConfig, StitchingConfig):
-    src: str = ""
-
 
 def _stitch_chunks(
     chunk_metas: Iterable[ChunkMeta], config: StitchingConfig
@@ -78,7 +74,6 @@ def _stitch_chunks(
             else:
                 chunk_metas.insert(0, candidate)
                 break
-
 
         yield MeasurementMeta.from_chunk_metas(collected)
 

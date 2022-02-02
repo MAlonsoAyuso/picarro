@@ -6,7 +6,6 @@
 - Decide on a license and update package metadata
 - Make parser crash with a nicer message about which file went wrong
 - Minor things
-  - Allow list of globs for src
   - Let measurements.columns be the list that is exported; check that it is a superset of the columns to be analyzed and/or plotted; and determine the full list to be read as measurements.columns + whatever needed for timestamps, alarms, valves, ...
   - Check for gaps within files too; cut chunks already when reading file?
 - Make overview figure of all files?

@@ -1,21 +1,21 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
-import dataclasses
 from enum import Enum, auto
-from hashlib import sha256
 from pathlib import Path
 from typing import (
-    Any,
     Dict,
     Optional,
+    Union,
+    List,
 )
 import toml
 import cattr.preconf.tomlkit
 import pandas as pd
 import logging
 from picarro.analyze import FluxEstimationConfig
+from picarro.chunks import ParsingConfig
 from picarro.logging import DEFAULT_LOG_SETTINGS, LogSettingsDict
-from picarro.measurements import MeasurementsConfig
+from picarro.measurements import StitchingConfig
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ _toml_converter = cattr.preconf.tomlkit.make_converter()
 _toml_converter.register_structure_hook(
     pd.Timedelta, lambda v, _: pd.Timedelta(v, CONFIG_FILE_TIME_UNIT)
 )
+_toml_converter.register_structure_hook(Union[str, List[str]], lambda v, _: v)
 
 
 class OutItem(Enum):
@@ -53,13 +54,18 @@ class OutputConfig:
     def get_path(self, item: OutItem) -> Path:
         return self.out_dir / self.rel_paths[item]
 
+
+@dataclass
+class MeasurementsConfig(ParsingConfig, StitchingConfig):
+    src: Union[str, List[str]] = ""
+
+
 @dataclass
 class AppConfig:
     measurements: MeasurementsConfig
     flux_estimation: Optional[FluxEstimationConfig] = None
     output: OutputConfig = field(default_factory=OutputConfig)
     logging: LogSettingsDict = field(default_factory=lambda: DEFAULT_LOG_SETTINGS)
-
 
     @classmethod
     def from_toml(cls, path: Path):

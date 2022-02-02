@@ -6,6 +6,8 @@ from pathlib import Path
 import shutil
 from typing import Iterator, List, Sequence
 import json
+
+from numpy import isin
 from picarro.analyze import (
     ESTIMATORS,
     AnalysisResult,
@@ -93,9 +95,16 @@ def _save_measurement_metas(measurement_metas: Sequence[MeasurementMeta], path: 
 
 
 def _iter_chunk_metas(config: AppConfig) -> Iterator[picarro.chunks.ChunkMeta]:
-    file_paths = map(Path, glob.glob(config.measurements.src, recursive=True))
-    for path in file_paths:
-        yield from picarro.chunks.read_chunks(path, config.measurements)
+    glob_patterns = config.measurements.src
+    if isinstance(glob_patterns, str):
+        glob_patterns = [glob_patterns]
+    for glob_pattern in glob_patterns:
+        file_paths = list(map(Path, glob.glob(glob_pattern, recursive=True)))
+        logger.info(
+            f"Found {len(file_paths)} source files using pattern {glob_pattern}"
+        )
+        for path in file_paths:
+            yield from picarro.chunks.read_chunks(path, config.measurements)
 
 
 def load_measurement_metas(config: AppConfig) -> List[MeasurementMeta]:
