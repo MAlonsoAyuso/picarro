@@ -106,6 +106,8 @@ def plot_measurement(
         ax.legend(loc="lower left", bbox_to_anchor=(0, 0))
 
     last_ax = ax_by_column[columns[-1]]
-    last_ax.set_xlabel(f"Time elapsed (minutes) since\n{measurement_start}")
+    last_ax.set_xlabel(
+        f"Time elapsed (minutes) since\n{measurement_start:%Y-%m-%d %H:%M:%S}"
+    )
 
     return fig
