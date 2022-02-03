@@ -75,7 +75,7 @@ Chunk = NewType("Chunk", pd.DataFrame)
 
 def read_file(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
     logger.debug(f"Reading file {path}")
-    d = pd.read_csv(path, sep=r"\s+")
+    d = pd.read_csv(path, sep=r"\s+", usecols=_get_columns_to_read(config))
     try:
         d = _clean_raw_data(d, config)
     except Exception as e:
@@ -88,16 +88,10 @@ def _get_columns_to_read(config: ParsingConfig) -> List[str]:
         [config.epoch_time_column, config.valve_column, *config.extra_columns]
     )
 
+
 def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
     file_line_numbers = pd.RangeIndex(2, len(d) + 2)  # for debugging
     d = d.set_index(file_line_numbers)
-
-    # Extract requested columns
-    columns_to_read = _get_columns_to_read(config)
-    missing_columns = set(columns_to_read) - set(columns_to_read)
-    if missing_columns:
-        raise InvalidData(f"Missing columns {missing_columns}.")
-    d = d[columns_to_read]
 
     # Reindex as time stamp
     d = _reindex_timestamp(d, config)
