@@ -206,16 +206,16 @@ def estimate_flux(config: FluxEstimationConfig, data: pd.Series) -> FluxEstimato
 
 
 def build_fluxes_dataframe(flux_results: List[FluxResult]) -> pd.DataFrame:
-    def make_row(analysis_result: FluxResult):
+    def make_row(flux_result: FluxResult):
         return pd.Series(
             dict(
-                start_utc=analysis_result.measurement_meta.start,
-                end_utc=analysis_result.measurement_meta.end,
-                valve_number=analysis_result.measurement_meta.valve_number,
-                column=analysis_result.estimator.column,
-                vol_flux=analysis_result.estimator.estimate_vol_flux(),
-                n_samples_total=analysis_result.measurement_meta.n_samples,
-                n_samples_flux_estimate=analysis_result.estimator.n_samples,
+                start_utc=flux_result.measurement_meta.start,
+                end_utc=flux_result.measurement_meta.end,
+                valve_number=flux_result.measurement_meta.valve_number,
+                column=flux_result.estimator.column,
+                vol_flux=flux_result.estimator.estimate_vol_flux(),
+                n_samples_total=flux_result.measurement_meta.n_samples,
+                n_samples_flux_estimate=flux_result.estimator.n_samples,
             )
         )
 

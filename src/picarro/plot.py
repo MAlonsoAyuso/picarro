@@ -3,8 +3,8 @@ from typing import Iterable, Sequence
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from picarro.analyze import ESTIMATORS
-from picarro.analyze import FluxResult
+from picarro.fluxes import ESTIMATORS
+from picarro.fluxes import FluxResult
 from picarro.measurements import Measurement
 import pandas as pd
 
@@ -30,7 +30,7 @@ def _subplot_title(column):
 def plot_measurement(
     data: Measurement,
     columns: Sequence[str],
-    analysis_results: Iterable[FluxResult] = (),
+    flux_results: Iterable[FluxResult] = (),
 ) -> Figure:
     height_per_column = 1.7
     height_extra = 1.3
@@ -62,7 +62,7 @@ def plot_measurement(
         ax.set_title(_subplot_title(col))
         ax.plot(calculate_elapsed(data.index), data[col])
 
-    for ar in analysis_results:
+    for ar in flux_results:
         if not ar.measurement_meta.start == measurement_start:
             continue
         if not ar.estimator.column in columns:

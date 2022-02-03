@@ -8,7 +8,7 @@ import json
 
 import click
 
-from picarro.analyze import (
+from picarro.fluxes import (
     ESTIMATORS,
     FluxResult,
     FluxEstimator,
@@ -122,21 +122,21 @@ def export_measurements(config: AppConfig):
     logger.info(f"Wrote {len(measurement_metas)} measurement(s) to files.")
 
 
-def estimate_fluxes(config: AppConfig):
+def estimate_and_save_fluxes(config: AppConfig):
     if not config.flux_estimation:
         raise ConfigProblem("No flux estimation config specified.")
     path = _prepare_write_path(config, OutItem.fluxes_json)
-    analysis_results = list(analyze_fluxes(config))
-    columns = {ar.estimator.column for ar in analysis_results}
-    n_measurements = len({ar.measurement_meta for ar in analysis_results})
-    _save_analysis_results(analysis_results, path)
+    flux_results = list(estimate_fluxes(config))
+    columns = {ar.estimator.column for ar in flux_results}
+    n_measurements = len({ar.measurement_meta for ar in flux_results})
+    _save_flux_results(flux_results, path)
     logger.info(
-        f"Estimated {len(analysis_results)} fluxes ({', '.join(columns)}) "
+        f"Estimated {len(flux_results)} fluxes ({', '.join(columns)}) "
         f"in {n_measurements} measurements."
     )
 
 
-def analyze_fluxes(config: AppConfig) -> Iterator[FluxResult]:
+def estimate_fluxes(config: AppConfig) -> Iterator[FluxResult]:
     if not config.flux_estimation:
         raise ConfigProblem("No flux estimation config specified.")
     measurement_metas = load_measurement_metas(config)
@@ -150,13 +150,13 @@ def analyze_fluxes(config: AppConfig) -> Iterator[FluxResult]:
             )
 
 
-def _save_analysis_results(analysis_results: List[FluxResult], path: Path):
-    obj = _json_converter.unstructure(analysis_results)
+def _save_flux_results(flux_results: List[FluxResult], path: Path):
+    obj = _json_converter.unstructure(flux_results)
     with open(path, "w") as f:
         json.dump(obj, f)
 
 
-def _load_analysis_results(config: AppConfig) -> List[FluxResult]:
+def _load_flux_results(config: AppConfig) -> List[FluxResult]:
     path = config.output.get_path(OutItem.fluxes_json)
     if not path.exists():
         raise PreviousStepRequired("Must estimate fluxes first.")
@@ -168,9 +168,9 @@ def _load_analysis_results(config: AppConfig) -> List[FluxResult]:
 def export_fluxes_csv(config: AppConfig):
     path = _prepare_write_path(config, OutItem.fluxes_csv)
 
-    analysis_results = _load_analysis_results(config)
+    flux_results = _load_flux_results(config)
 
-    data = build_fluxes_dataframe(analysis_results)
+    data = build_fluxes_dataframe(flux_results)
     data.to_csv(path, index=False)
     logger.info(f"Saved results at {path}")
 
@@ -179,7 +179,7 @@ def _get_flux_results_by_measurement(
     config: AppConfig,
 ) -> dict[MeasurementMeta, List[FluxResult]]:
     result = defaultdict(list)
-    for flux_result in _load_analysis_results(config):
+    for flux_result in _load_flux_results(config):
         result[flux_result.measurement_meta].append(flux_result)
     return result
 

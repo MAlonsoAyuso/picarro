@@ -1,6 +1,6 @@
 import pandas as pd
 from picarro.chunks import read_file
-from picarro.analyze import FluxEstimationConfig, estimate_flux
+from picarro.fluxes import FluxEstimationConfig, estimate_flux
 import pathlib
 import numpy as np
 

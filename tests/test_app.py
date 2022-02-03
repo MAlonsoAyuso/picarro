@@ -125,18 +125,18 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         assert data_summaries == expected_summaries
 
     @call_immediately
-    def test_analysis_working():
-        # Test analysis
+    def test_flux_estimation_working():
+        # Test flux estimation
         assert app_config.flux_estimation
-        analysis_results = list(picarro.app.analyze_fluxes(app_config))
-        expected_analysis_results = list(
+        flux_results = list(picarro.app.estimate_fluxes(app_config))
+        expected_flux_results = list(
             itertools.product(expected_summaries, app_config.flux_estimation.columns)
         )
-        seen_analysis_results = [
+        seen_flux_results = [
             (summarize_measurement(ar.measurement_meta), ar.estimator.column)
-            for ar in analysis_results
+            for ar in flux_results
         ]
-        assert expected_analysis_results == seen_analysis_results
+        assert expected_flux_results == seen_flux_results
 
     @call_immediately
     def test_export_measurement_data():

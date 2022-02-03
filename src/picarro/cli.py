@@ -125,7 +125,7 @@ def fluxes(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, picarro.config.AppConfig), config
 
-    picarro.app.estimate_fluxes(config)
+    picarro.app.estimate_and_save_fluxes(config)
     picarro.app.export_fluxes_csv(config)
 
 
