@@ -204,5 +204,4 @@ def plot_flux_fits(config: AppConfig):
 
 
 def _build_measurement_file_name_stem(measurement_meta: MeasurementMeta) -> str:
-    date_str = measurement_meta.start.isoformat().replace(":", "_")
-    return f"{measurement_meta.valve_label}-{date_str}"
+    return f"{measurement_meta.valve_label}-{measurement_meta.start:%Y%m%d-%H%M%S}"
