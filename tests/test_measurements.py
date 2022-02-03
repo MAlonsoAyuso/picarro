@@ -1,9 +1,11 @@
 from __future__ import annotations
 import itertools
+
+import pytest
 from picarro.config import MeasurementsConfig
+from picarro.core import ConfigProblem
 from picarro.measurements import (
     build_measurement_metas,
-    identify_measurement_metas,
     read_measurements,
 )
 from picarro.chunks import read_chunks
@@ -93,3 +95,45 @@ def _test_measurements_and_summaries_correct(
         for m in read_measurements(measurement_metas, config)
     ]
     assert data_summaries == expected_summaries
+
+
+def test_valve_labels():
+    valve_labels = {
+        13: "thirteen",
+        14: "fourteen",
+        15: "fifteen",
+        1: "one",
+        2: "two",
+        3: "three",
+        4: "four",
+        5: "five",
+        6: "six",
+        223: "an-extra-does-not-hurt",
+    }
+    paths = [p for p in (_DATA_DIR / "adjacent_files").iterdir()]
+    config = MeasurementsConfig(
+        valve_column="solenoid_valves",
+        extra_columns=EXTRA_COLUMNS,
+        max_gap=pd.Timedelta(1, "s"),
+        valve_labels=valve_labels,
+    )
+    chunk_metas = list(itertools.chain(*(read_chunks(path, config) for path in paths)))
+    for mm in build_measurement_metas(chunk_metas, config):
+        assert mm.valve_label == valve_labels[mm.valve_number]
+
+    config = MeasurementsConfig(
+        valve_column="solenoid_valves",
+        extra_columns=EXTRA_COLUMNS,
+        max_gap=pd.Timedelta(1, "s"),
+        valve_labels={1: "others-missing"},
+    )
+    with pytest.raises(ConfigProblem):
+        list(build_measurement_metas(chunk_metas, config))
+
+    with pytest.raises(ConfigProblem):
+        config = MeasurementsConfig(
+            valve_column="solenoid_valves",
+            extra_columns=EXTRA_COLUMNS,
+            max_gap=pd.Timedelta(1, "s"),
+            valve_labels={i: "//: <- forbidden characters" for i in range(16)},
+        )

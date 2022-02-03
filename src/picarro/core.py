@@ -1,0 +1,2 @@
+class ConfigProblem(Exception):
+    pass

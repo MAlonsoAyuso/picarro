@@ -4,6 +4,7 @@ import datetime
 import glob
 import itertools
 from pathlib import Path
+import string
 from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
 import pandas as pd
 from picarro.chunks import (
@@ -13,6 +14,8 @@ from picarro.chunks import (
     read_chunks,
 )
 import logging
+
+from picarro.core import ConfigProblem
 
 logger = logging.getLogger(__name__)
 
@@ -29,19 +32,44 @@ class MeasurementMeta:
     end: pd.Timestamp
     valve_number: int
     n_samples: int
+    valve_label: str
 
     @staticmethod
-    def from_chunk_metas(chunk_metas: List[ChunkMeta]) -> MeasurementMeta:
+    def from_chunk_metas(
+        chunk_metas: List[ChunkMeta], valve_labels: Optional[dict[int, str]]
+    ) -> MeasurementMeta:
         valve_numbers = {c.valve_number for c in chunk_metas}
         assert len(valve_numbers) == 1, valve_numbers
         (valve_number,) = valve_numbers
+
+        if valve_labels is None:
+            valve_label = str(valve_number)
+        else:
+            try:
+                valve_label = valve_labels[valve_number]
+            except KeyError:
+                raise ConfigProblem(f"No label found for valve #{valve_number}")
+
         return MeasurementMeta(
             tuple(chunk_metas),
             chunk_metas[0].start,
             chunk_metas[-1].end,
             valve_number,
             sum(c.n_samples for c in chunk_metas),
+            valve_label,
         )
+
+
+# The labels are meant to be used e.g., in file names and thus they should not contain
+# punctuation such as : or /. Here is a whitelist that should be sufficient:
+ALLOWED_LABEL_CHARACTERS = set(string.ascii_letters + string.digits + "_-.,*()[]{}=+*")
+
+
+def _validate_label(s: str):
+    violators = set(s) - ALLOWED_LABEL_CHARACTERS
+    if set(s) < ALLOWED_LABEL_CHARACTERS:
+        return
+    raise ConfigProblem(f"Disallowed character(s) {violators!r} in label {s!r}")
 
 
 @dataclass
@@ -49,6 +77,12 @@ class StitchingConfig:
     max_gap: pd.Timedelta = pd.Timedelta(10, "s")
     min_duration: Optional[pd.Timedelta] = None
     max_duration: Optional[pd.Timedelta] = None
+    valve_labels: Optional[Dict[int, str]] = None
+
+    def __post_init__(self):
+        if self.valve_labels:
+            for label in self.valve_labels.values():
+                _validate_label(label)
 
 
 @dataclass
@@ -108,7 +142,7 @@ def _stitch_chunk_metas(
                 chunk_metas.insert(0, candidate)
                 break
 
-        yield MeasurementMeta.from_chunk_metas(collected)
+        yield MeasurementMeta.from_chunk_metas(collected, config.valve_labels)
 
 
 def _filter_measurement_metas(

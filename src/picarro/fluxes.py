@@ -212,6 +212,7 @@ def build_fluxes_dataframe(flux_results: List[FluxResult]) -> pd.DataFrame:
                 start_utc=flux_result.measurement_meta.start,
                 end_utc=flux_result.measurement_meta.end,
                 valve_number=flux_result.measurement_meta.valve_number,
+                valve_label=flux_result.measurement_meta.valve_label,
                 column=flux_result.estimator.column,
                 vol_flux=flux_result.estimator.estimate_vol_flux(),
                 n_samples_total=flux_result.measurement_meta.n_samples,

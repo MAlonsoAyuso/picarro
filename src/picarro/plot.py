@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from picarro.fluxes import ESTIMATORS
 from picarro.fluxes import FluxResult
-from picarro.measurements import Measurement
+from picarro.measurements import Measurement, MeasurementMeta
 import pandas as pd
 
 # Matplotlib TkAgg backend hogs memory and crashes with too many figures:
@@ -28,7 +28,8 @@ def _subplot_title(column):
 
 
 def plot_measurement(
-    data: Measurement,
+    measurement_meta: MeasurementMeta,
+    measurement: Measurement,
     columns: Sequence[str],
     flux_results: Iterable[FluxResult] = (),
 ) -> Figure:
@@ -47,7 +48,11 @@ def plot_measurement(
         figsize=(6.4, height_total),
     )
 
-    measurement_start = data.index[0]
+    fig.suptitle(
+        f"Valve #{measurement_meta.valve_number}: {measurement_meta.valve_label}"
+    )
+
+    measurement_start = measurement.index[0]
 
     if len(columns) > 1:
         ax_by_column = dict(zip(columns, axs))  # type: ignore
@@ -60,24 +65,22 @@ def plot_measurement(
     for col in columns:
         ax = ax_by_column[col]
         ax.set_title(_subplot_title(col))
-        ax.plot(calculate_elapsed(data.index), data[col])
+        ax.plot(calculate_elapsed(measurement.index), measurement[col])
 
-    for ar in flux_results:
-        if not ar.measurement_meta.start == measurement_start:
-            continue
-        if not ar.estimator.column in columns:
+    for flux_result in flux_results:
+        if flux_result.measurement_meta != measurement_meta:
             continue
 
-        moments = ar.estimator.moments
-        estimator_times = data.loc[moments.fit_start : moments.fit_end].index
+        moments = flux_result.estimator.moments
+        estimator_times = measurement.loc[moments.fit_start : moments.fit_end].index
         assert isinstance(estimator_times, pd.DatetimeIndex)
-        estimated_values = ar.estimator.predict(estimator_times)
-        ax = ax_by_column[ar.estimator.column]
+        estimated_values = flux_result.estimator.predict(estimator_times)
+        ax = ax_by_column[flux_result.estimator.column]
         ax.plot(
             calculate_elapsed(estimator_times),
             estimated_values,
             lw=2,
-            color=_ESTIMATOR_COLORS[ar.estimator.config.method],
+            color=_ESTIMATOR_COLORS[flux_result.estimator.config.method],
         )
 
     last_ax = ax_by_column[columns[-1]]

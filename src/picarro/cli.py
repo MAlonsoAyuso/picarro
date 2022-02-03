@@ -6,6 +6,7 @@ import os
 import picarro.config
 import picarro.app
 import logging
+from picarro.core import ConfigProblem
 
 from picarro.measurements import MeasurementMeta
 
@@ -23,7 +24,7 @@ def handle_exceptions(func: Callable) -> Callable:
             raise click.ClickException(
                 f"Already exists: {e}. Use --force to overwrite."
             )
-        except picarro.app.ConfigProblem as e:
+        except ConfigProblem as e:
             raise click.ClickException(f"There is a problem with the config: {e}")
         except picarro.app.PreviousStepRequired as e:
             raise click.ClickException(

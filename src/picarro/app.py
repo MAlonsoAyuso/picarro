@@ -7,6 +7,7 @@ from typing import Iterator, List
 import json
 
 import click
+from picarro.core import ConfigProblem
 
 from picarro.fluxes import (
     ESTIMATORS,
@@ -17,7 +18,6 @@ from picarro.fluxes import (
 )
 from picarro.config import AppConfig, OutItem
 from picarro.measurements import (
-    Measurement,
     MeasurementMeta,
     read_measurement,
     read_measurements,
@@ -46,10 +46,6 @@ _json_converter.register_structure_hook(
     FluxEstimator,
     lambda obj, _: _json_converter.structure(obj, ESTIMATORS[obj["config"]["method"]]),
 )
-
-
-class ConfigProblem(Exception):
-    pass
 
 
 class PicarroPathExists(Exception):
@@ -115,7 +111,7 @@ def export_measurements(config: AppConfig):
     ) as bar:
         for measurement_meta in bar:
             measurement = read_measurement(measurement_meta, config.measurements, cache)
-            filename_stem = _build_measurement_file_name_stem(measurement)
+            filename_stem = _build_measurement_file_name_stem(measurement_meta)
             out_path = out_dir / f"{filename_stem}.csv"
             logger.debug(f"Writing measurement to file {out_path}.")
             measurement.to_csv(out_path)
@@ -200,14 +196,18 @@ def plot_flux_fits(config: AppConfig):
         for measurement_meta, flux_results in bar:
             measurement = read_measurement(measurement_meta, config.measurements, cache)
             fig = picarro.plot.plot_measurement(
-                measurement, config.flux_estimation.columns, flux_results
+                measurement_meta,
+                measurement,
+                config.flux_estimation.columns,
+                flux_results,
             )
-            file_name = _build_measurement_file_name_stem(measurement) + ".png"
+            file_name = _build_measurement_file_name_stem(measurement_meta) + ".png"
             path = out_dir / file_name
             fig.savefig(path)
             matplotlib.pyplot.close(fig)
     logger.info(f"Plotted {n_measurements} measurements.")
 
 
-def _build_measurement_file_name_stem(measurement: Measurement) -> str:
-    return measurement.index[0].isoformat().replace(":", "_")
+def _build_measurement_file_name_stem(measurement_meta: MeasurementMeta) -> str:
+    date_str = measurement_meta.start.isoformat().replace(":", "_")
+    return f"{measurement_meta.valve_label}-{date_str}"
