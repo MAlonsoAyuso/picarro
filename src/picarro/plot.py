@@ -61,7 +61,7 @@ def plot_measurement(
         ax_by_column = {columns[0]: axs}
 
     def calculate_elapsed(time):
-        return (time - measurement_start).seconds / _SECONDS_PER_MINUTE
+        return (time - measurement_start).total_seconds() / _SECONDS_PER_MINUTE
 
     for col in columns:
         ax = ax_by_column[col]
