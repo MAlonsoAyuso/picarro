@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import defaultdict
 import os
 from pathlib import Path
 import shutil
@@ -16,6 +17,7 @@ from picarro.config import AppConfig, OutItem
 from picarro.measurements import (
     Measurement,
     MeasurementMeta,
+    read_measurement,
     read_measurements,
 )
 import picarro.measurements
@@ -171,20 +173,29 @@ def export_fluxes_csv(config: AppConfig):
     logger.info(f"Saved results at {path}")
 
 
+def _get_flux_results_by_measurement(
+    config: AppConfig,
+) -> dict[MeasurementMeta, List[FluxResult]]:
+    result = defaultdict(list)
+    for flux_result in _load_analysis_results(config):
+        result[flux_result.measurement_meta].append(flux_result)
+    return result
+
+
 def plot_flux_fits(config: AppConfig):
     import matplotlib.pyplot
 
-    analysis_results = _load_analysis_results(config)
+    flux_results_by_measurement = _get_flux_results_by_measurement(config)
     assert config.flux_estimation
-    measurement_metas = load_measurement_metas(config)
-    n_measurements = len(measurement_metas)
-    measurements = read_measurements(measurement_metas, config.measurements)
+    n_measurements = len(flux_results_by_measurement)
 
     out_dir = _prepare_write_path(config, OutItem.flux_plots_dir)
     out_dir.mkdir(parents=True)
-    for measurement in measurements:
+    cache = {}
+    for measurement_meta, flux_results in flux_results_by_measurement.items():
+        measurement = read_measurement(measurement_meta, config.measurements, cache)
         fig = picarro.plot.plot_measurement(
-            measurement, config.flux_estimation.columns, analysis_results
+            measurement, config.flux_estimation.columns, flux_results
         )
         file_name = _build_measurement_file_name_stem(measurement) + ".png"
         path = out_dir / file_name
