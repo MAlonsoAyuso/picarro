@@ -111,7 +111,7 @@ def export_measurements(config: AppConfig):
         filename_stem = _build_measurement_file_name_stem(measurement)
         out_path = out_dir / f"{filename_stem}.csv"
         logger.debug(f"Writing measurement to file {out_path}.")
-        measurement[config.measurements.columns].to_csv(out_path)
+        measurement.to_csv(out_path)
     logger.info(f"Wrote {len(measurement_metas)} measurement(s) to files.")
 
 

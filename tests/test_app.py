@@ -40,7 +40,7 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
         measurements=MeasurementsConfig(
             valve_column="solenoid_valves",
             src="data-dir/**/*.dat",
-            columns=["N2O", "CH4", "CO2", "EPOCH_TIME", "solenoid_valves"],
+            extra_columns=["N2O", "CH4", "CO2"],
             max_gap=pd.Timedelta(5, "s"),
             min_duration=pd.Timedelta(1080, "s"),
             max_duration=None,
@@ -146,7 +146,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         assert len(paths) == len(expected_summaries)
         for path, summary in zip(sorted(paths), expected_summaries):
             data = pd.read_csv(path, index_col="datetime_utc")
-            assert list(data.columns) == app_config.measurements.columns
+            assert set(data.columns) >= set(app_config.measurements.extra_columns)
             assert len(data) == summary["n_samples"]
             assert str(data[app_config.measurements.valve_column].dtype).startswith(
                 "int"

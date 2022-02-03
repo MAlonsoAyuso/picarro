@@ -18,9 +18,7 @@ def data_path(relpath: str) -> Path:
 
 CONFIG = MeasurementsConfig(
     valve_column="solenoid_valves",
-    columns=[
-        "solenoid_valves",
-        "EPOCH_TIME",
+    extra_columns=[
         "N2O",
     ],
 )

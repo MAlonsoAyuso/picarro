@@ -39,7 +39,7 @@ exponential_config = FluxEstimationConfig(
 measurement_config = MeasurementsConfig(
     valve_column="solenoid_valves",
     src=str(data_path("example_measurement.dat")),
-    columns=["N2O", "CO2"],
+    extra_columns=["N2O", "CO2"],
 )
 
 

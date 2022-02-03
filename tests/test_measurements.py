@@ -16,9 +16,7 @@ def data_path(relpath: str):
     return _DATA_DIR / relpath
 
 
-COLUMNS = [
-    "solenoid_valves",
-    "EPOCH_TIME",
+EXTRA_COLUMNS = [
     "N2O",
 ]
 
@@ -27,7 +25,7 @@ def test_iter_measurement_metas():
     paths = [p for p in (_DATA_DIR / "adjacent_files").iterdir()]
     config = MeasurementsConfig(
         valve_column="solenoid_valves",
-        columns=COLUMNS,
+        extra_columns=EXTRA_COLUMNS,
         max_gap=pd.Timedelta(5, "s"),
     )
     # These were established by manually sifting through the files
@@ -50,7 +48,7 @@ def test_dont_join_chunks_if_time_gap_is_too_large():
     paths = [p for p in (_DATA_DIR / "adjacent_files").iterdir()]
     config = MeasurementsConfig(
         valve_column="solenoid_valves",
-        columns=COLUMNS,
+        extra_columns=EXTRA_COLUMNS,
         max_gap=pd.Timedelta(1, "s"),
     )
     # These were established by manually sifting through the files

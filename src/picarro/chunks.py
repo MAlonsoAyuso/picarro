@@ -4,10 +4,12 @@ from enum import Enum
 from os import PathLike
 from pathlib import Path
 from typing import (
+    Hashable,
     Iterator,
     List,
     Mapping,
     NewType,
+    Sequence,
     Union,
 )
 import logging
@@ -42,7 +44,7 @@ class InvalidRowHandling(Enum):
 @dataclass
 class ParsingConfig:
     valve_column: str
-    columns: List[str] = field(default_factory=list)
+    extra_columns: List[str] = field(default_factory=list)
     null_rows: InvalidRowHandling = InvalidRowHandling.skip
     epoch_time_column: str = "EPOCH_TIME"
 
@@ -81,19 +83,24 @@ def read_file(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
     return ParsedFile(d)
 
 
+def _get_columns_to_read(config: ParsingConfig) -> List[str]:
+    return _deduplicate_sequence(
+        [config.epoch_time_column, config.valve_column, *config.extra_columns]
+    )
+
 def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
     file_line_numbers = pd.RangeIndex(2, len(d) + 2)  # for debugging
     d = d.set_index(file_line_numbers)
 
     # Extract requested columns
-    columns_to_read = _get_columns_to_read(config.columns)
-    missing_columns = set(config.columns) - set(columns_to_read)
+    columns_to_read = _get_columns_to_read(config)
+    missing_columns = set(columns_to_read) - set(columns_to_read)
     if missing_columns:
         raise InvalidData(f"Missing columns {missing_columns}.")
     d = d[columns_to_read]
 
     # Reindex as time stamp
-    d = d.pipe(_reindex_timestamp)
+    d = _reindex_timestamp(d, config)
 
     # Nulls
     row_has_null = d.isnull().any(axis=1)
@@ -111,16 +118,17 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
     return d
 
 
-_TIMESTAMP_SRC_COLUMN = "EPOCH_TIME"
-_ALWAYS_READ_COLUMNS = [_TIMESTAMP_SRC_COLUMN]
+def _deduplicate_sequence(l: Sequence[Hashable]) -> List[Hashable]:
+    seen = set()
+    result = []
+    for item in l:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
-def _get_columns_to_read(user_columns: List[str]) -> List[str]:
-    extra = [c for c in _ALWAYS_READ_COLUMNS if c not in set(user_columns)]
-    return user_columns + extra
-
-
-def _reindex_timestamp(d):
+def _reindex_timestamp(d, config: ParsingConfig):
     # Reindex data in timestamps (numpy.datetime64).
     # Just to make sure, we also check that the resulting index is unique.
 
@@ -128,7 +136,7 @@ def _reindex_timestamp(d):
     # In order to exactly represent this data as a timestamp, we do the
     # conversion by first converting to integer milliseconds.
     timestamp = pd.to_datetime(
-        d[_TIMESTAMP_SRC_COLUMN].mul(1e3).round().astype("int64").rename(INDEX_NAME),
+        d[config.epoch_time_column].mul(1e3).round().astype("int64").rename(INDEX_NAME),
         unit=_DATETIME64_UNIT,
     )
     if not timestamp.is_unique:
