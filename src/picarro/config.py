@@ -55,8 +55,6 @@ class OutputConfig:
         return self.out_dir / self.rel_paths[item]
 
 
-
-
 @dataclass
 class AppConfig:
     measurements: MeasurementsConfig

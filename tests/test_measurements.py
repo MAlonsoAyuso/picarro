@@ -5,7 +5,7 @@ from picarro.measurements import (
     read_measurements,
     stitch_chunk_metas,
 )
-from picarro.chunks import PicarroColumns, read_chunks
+from picarro.chunks import read_chunks
 from pathlib import Path
 import pandas as pd
 
@@ -17,16 +17,16 @@ def data_path(relpath: str):
 
 
 COLUMNS = [
-    PicarroColumns.solenoid_valves,
-    PicarroColumns.EPOCH_TIME,
-    PicarroColumns.N2O,
+    "solenoid_valves",
+    "EPOCH_TIME",
+    "N2O",
 ]
 
 
 def test_iter_measurement_metas():
     paths = [p for p in (_DATA_DIR / "adjacent_files").iterdir()]
     config = MeasurementsConfig(
-        valve_column=PicarroColumns.solenoid_valves,
+        valve_column="solenoid_valves",
         columns=COLUMNS,
         max_gap=pd.Timedelta(5, "s"),
     )
@@ -49,7 +49,7 @@ def test_iter_measurement_metas():
 def test_dont_join_chunks_if_time_gap_is_too_large():
     paths = [p for p in (_DATA_DIR / "adjacent_files").iterdir()]
     config = MeasurementsConfig(
-        valve_column=PicarroColumns.solenoid_valves,
+        valve_column="solenoid_valves",
         columns=COLUMNS,
         max_gap=pd.Timedelta(1, "s"),
     )

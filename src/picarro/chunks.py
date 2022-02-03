@@ -52,46 +52,6 @@ INDEX_NAME = "datetime_utc"
 Column = str
 
 
-class PicarroColumns:
-    DATE = "DATE"
-    TIME = "TIME"
-    FRAC_DAYS_SINCE_JAN1 = "FRAC_DAYS_SINCE_JAN1"
-    FRAC_HRS_SINCE_JAN1 = "FRAC_HRS_SINCE_JAN1"
-    JULIAN_DAYS = "JULIAN_DAYS"
-    EPOCH_TIME = "EPOCH_TIME"
-    ALARM_STATUS = "ALARM_STATUS"
-    INST_STATUS = "INST_STATUS"
-    CavityPressure = "CavityPressure"
-    CavityTemp = "CavityTemp"
-    DasTemp = "DasTemp"
-    EtalonTemp = "EtalonTemp"
-    WarmBoxTemp = "WarmBoxTemp"
-    species = "species"
-    MPVPosition = "MPVPosition"
-    OutletValve = "OutletValve"
-    solenoid_valves = "solenoid_valves"
-    N2O = "N2O"
-    N2O_30s = "N2O_30s"
-    N2O_1min = "N2O_1min"
-    N2O_5min = "N2O_5min"
-    N2O_dry = "N2O_dry"
-    N2O_dry30s = "N2O_dry30s"
-    N2O_dry1min = "N2O_dry1min"
-    N2O_dry5min = "N2O_dry5min"
-    CO2 = "CO2"
-    CH4 = "CH4"
-    CH4_dry = "CH4_dry"
-    H2O = "H2O"
-    NH3 = "NH3"
-    ChemDetect = "ChemDetect"
-    peak_1a = "peak_1a"
-    peak_41 = "peak_41"
-    peak_4 = "peak_4"
-    peak15 = "peak15"
-    ch4_splinemax = "ch4_splinemax"
-    nh3_conc_ave = "nh3_conc_ave"
-
-
 _DATETIME64_UNIT = "ms"
 
 
@@ -151,7 +111,8 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
     return d
 
 
-_ALWAYS_READ_COLUMNS = [PicarroColumns.EPOCH_TIME]
+_TIMESTAMP_SRC_COLUMN = "EPOCH_TIME"
+_ALWAYS_READ_COLUMNS = [_TIMESTAMP_SRC_COLUMN]
 
 
 def _get_columns_to_read(user_columns: List[str]) -> List[str]:
@@ -167,11 +128,7 @@ def _reindex_timestamp(d):
     # In order to exactly represent this data as a timestamp, we do the
     # conversion by first converting to integer milliseconds.
     timestamp = pd.to_datetime(
-        d[PicarroColumns.EPOCH_TIME]
-        .mul(1e3)
-        .round()
-        .astype("int64")
-        .rename(INDEX_NAME),
+        d[_TIMESTAMP_SRC_COLUMN].mul(1e3).round().astype("int64").rename(INDEX_NAME),
         unit=_DATETIME64_UNIT,
     )
     if not timestamp.is_unique:

@@ -1,5 +1,5 @@
 import pandas as pd
-from picarro.chunks import read_file, PicarroColumns
+from picarro.chunks import read_file
 from picarro.analyze import FluxEstimationConfig, estimate_flux
 import pathlib
 import numpy as np
@@ -37,7 +37,7 @@ exponential_config = FluxEstimationConfig(
 )
 
 measurement_config = MeasurementsConfig(
-    valve_column=PicarroColumns.solenoid_valves,
+    valve_column="solenoid_valves",
     src=str(data_path("example_measurement.dat")),
     columns=["N2O", "CO2"],
 )
@@ -46,7 +46,7 @@ measurement_config = MeasurementsConfig(
 def test_linear_N2O_slope_right_order_of_magnitude():
     # This test will catch any serious errors in order of magnitude etc
     measurement = read_file(data_path("example_measurement.dat"), measurement_config)[
-        PicarroColumns.N2O
+        "N2O"
     ]
     linear_estimator = estimate_flux(
         linear_config, measurement
@@ -59,7 +59,7 @@ def test_fit_line_approximates_values():
     # Using CO2 here because it has low noise and thus it will be very clear
     # if the values do not fit.
     measurement = read_file(data_path("example_measurement.dat"), measurement_config)[
-        PicarroColumns.CO2
+        "CO2"
     ]
 
     estimator = estimate_flux(linear_config, measurement)
@@ -90,7 +90,7 @@ def test_fit_line_approximates_values():
 
 def test_estimate_N2O_vol_flux_right_order_of_magnitude():
     measurement = read_file(data_path("example_measurement.dat"), measurement_config)[
-        PicarroColumns.N2O
+        "N2O"
     ]
     estimator = estimate_flux(linear_config, measurement)
     vol_flux = estimator.estimate_vol_flux()
@@ -108,7 +108,7 @@ def test_estimate_N2O_vol_flux_right_order_of_magnitude():
 
 def test_estimate_N2O_vol_flux_linear_and_exponential_agree():
     measurement = read_file(data_path("example_measurement.dat"), measurement_config)[
-        PicarroColumns.N2O
+        "N2O"
     ]
     linear_estimator = estimate_flux(linear_config, measurement)
     exponential_estimator = estimate_flux(exponential_config, measurement)

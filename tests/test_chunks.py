@@ -5,7 +5,6 @@ from picarro.chunks import (
     ChunkMeta,
     read_chunks,
     read_file,
-    PicarroColumns,
 )
 from pathlib import Path
 import pandas as pd
@@ -18,11 +17,11 @@ def data_path(relpath: str) -> Path:
 
 
 CONFIG = MeasurementsConfig(
-    valve_column=PicarroColumns.solenoid_valves,
+    valve_column="solenoid_valves",
     columns=[
-        PicarroColumns.solenoid_valves,
-        PicarroColumns.EPOCH_TIME,
-        PicarroColumns.N2O,
+        "solenoid_valves",
+        "EPOCH_TIME",
+        "N2O",
     ],
 )
 
