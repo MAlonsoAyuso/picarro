@@ -6,6 +6,8 @@ import shutil
 from typing import Iterator, List
 import json
 
+import click
+
 from picarro.analyze import (
     ESTIMATORS,
     FluxResult,
@@ -107,14 +109,16 @@ def export_measurements(config: AppConfig):
     measurement_metas = load_measurement_metas(config)
     out_dir = _prepare_write_path(config, OutItem.measurements_dir)
     out_dir.mkdir()
-    measurements = picarro.measurements.read_measurements(
-        measurement_metas, config.measurements
-    )
-    for measurement in measurements:
-        filename_stem = _build_measurement_file_name_stem(measurement)
-        out_path = out_dir / f"{filename_stem}.csv"
-        logger.debug(f"Writing measurement to file {out_path}.")
-        measurement.to_csv(out_path)
+    cache = {}
+    with click.progressbar(
+        measurement_metas, show_pos=True, label="Exporting measurements"
+    ) as bar:
+        for measurement_meta in bar:
+            measurement = read_measurement(measurement_meta, config.measurements, cache)
+            filename_stem = _build_measurement_file_name_stem(measurement)
+            out_path = out_dir / f"{filename_stem}.csv"
+            logger.debug(f"Writing measurement to file {out_path}.")
+            measurement.to_csv(out_path)
     logger.info(f"Wrote {len(measurement_metas)} measurement(s) to files.")
 
 
@@ -190,15 +194,18 @@ def plot_flux_fits(config: AppConfig):
     out_dir = _prepare_write_path(config, OutItem.flux_plots_dir)
     out_dir.mkdir(parents=True)
     cache = {}
-    for measurement_meta, flux_results in flux_results_by_measurement.items():
-        measurement = read_measurement(measurement_meta, config.measurements, cache)
-        fig = picarro.plot.plot_measurement(
-            measurement, config.flux_estimation.columns, flux_results
-        )
-        file_name = _build_measurement_file_name_stem(measurement) + ".png"
-        path = out_dir / file_name
-        fig.savefig(path)
-        matplotlib.pyplot.close(fig)
+    with click.progressbar(
+        flux_results_by_measurement.items(), show_pos=True, label="Plotting flux fits"
+    ) as bar:
+        for measurement_meta, flux_results in bar:
+            measurement = read_measurement(measurement_meta, config.measurements, cache)
+            fig = picarro.plot.plot_measurement(
+                measurement, config.flux_estimation.columns, flux_results
+            )
+            file_name = _build_measurement_file_name_stem(measurement) + ".png"
+            path = out_dir / file_name
+            fig.savefig(path)
+            matplotlib.pyplot.close(fig)
     logger.info(f"Plotted {n_measurements} measurements.")
 
 
