@@ -1,11 +1,10 @@
 from __future__ import annotations
-import itertools
 import pytest
 from picarro.config import MeasurementsConfig
 from picarro.chunks import (
     ChunkMeta,
     read_chunks,
-    _read_file,
+    read_file,
     PicarroColumns,
 )
 from pathlib import Path
@@ -14,7 +13,7 @@ import pandas as pd
 _DATA_DIR = Path(__file__).parent.parent / "example_data"
 
 
-def data_path(relpath):
+def data_path(relpath: str) -> Path:
     return _DATA_DIR / relpath
 
 
@@ -24,21 +23,21 @@ CONFIG = MeasurementsConfig(
         PicarroColumns.solenoid_valves,
         PicarroColumns.EPOCH_TIME,
         PicarroColumns.N2O,
-    ]
+    ],
 )
 
 
 def test_read_raw():
-    _read_file(data_path("example.dat"), CONFIG)
+    read_file(data_path("example.dat"), CONFIG)
 
 
 def test_require_unique_timestamps():
     with pytest.raises(ValueError):
-        _read_file(data_path("duplicate_timestamp.dat"), CONFIG)
+        read_file(data_path("duplicate_timestamp.dat"), CONFIG)
 
 
 def test_chunks_have_unique_int_valve_numbers():
-    for chunk_meta, chunk in read_chunks(data_path("example.dat"), CONFIG).items():
+    for _, chunk in read_chunks(data_path("example.dat"), CONFIG).items():
         valve_numbers = chunk[CONFIG.valve_column]
         assert valve_numbers.dtype == int  # type: ignore
         assert len(valve_numbers.unique()) == 1

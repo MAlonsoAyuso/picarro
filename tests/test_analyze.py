@@ -1,5 +1,5 @@
 import pandas as pd
-from picarro.chunks import _read_file, PicarroColumns
+from picarro.chunks import read_file, PicarroColumns
 from picarro.analyze import FluxEstimationConfig, estimate_flux
 import pathlib
 import numpy as np
@@ -9,7 +9,7 @@ from picarro.config import MeasurementsConfig
 _DATA_DIR = pathlib.Path(__file__).parent.parent / "example_data"
 
 
-def data_path(relpath):
+def data_path(relpath: str) -> pathlib.Path:
     return _DATA_DIR / relpath
 
 
@@ -45,10 +45,12 @@ measurement_config = MeasurementsConfig(
 
 def test_linear_N2O_slope_right_order_of_magnitude():
     # This test will catch any serious errors in order of magnitude etc
-    measurement = _read_file(data_path("example_measurement.dat"), measurement_config)[
+    measurement = read_file(data_path("example_measurement.dat"), measurement_config)[
         PicarroColumns.N2O
     ]
-    linear_estimator = estimate_flux(linear_config, measurement)
+    linear_estimator = estimate_flux(
+        linear_config, measurement
+    )  # pyright: reportGeneralTypeIssues=false
     linear_fit = linear_estimator.fit_params
     assert abs_rel_diff(linear_fit.slope, 1.44e-4) < 0.01  # 1.44 * 10^(-4) ppmv / s
 
@@ -56,7 +58,7 @@ def test_linear_N2O_slope_right_order_of_magnitude():
 def test_fit_line_approximates_values():
     # Using CO2 here because it has low noise and thus it will be very clear
     # if the values do not fit.
-    measurement = _read_file(data_path("example_measurement.dat"), measurement_config)[
+    measurement = read_file(data_path("example_measurement.dat"), measurement_config)[
         PicarroColumns.CO2
     ]
 
@@ -87,7 +89,7 @@ def test_fit_line_approximates_values():
 
 
 def test_estimate_N2O_vol_flux_right_order_of_magnitude():
-    measurement = _read_file(data_path("example_measurement.dat"), measurement_config)[
+    measurement = read_file(data_path("example_measurement.dat"), measurement_config)[
         PicarroColumns.N2O
     ]
     estimator = estimate_flux(linear_config, measurement)
@@ -105,7 +107,7 @@ def test_estimate_N2O_vol_flux_right_order_of_magnitude():
 
 
 def test_estimate_N2O_vol_flux_linear_and_exponential_agree():
-    measurement = _read_file(data_path("example_measurement.dat"), measurement_config)[
+    measurement = read_file(data_path("example_measurement.dat"), measurement_config)[
         PicarroColumns.N2O
     ]
     linear_estimator = estimate_flux(linear_config, measurement)

@@ -12,7 +12,7 @@ import pandas as pd
 _DATA_DIR = Path(__file__).parent.parent / "example_data"
 
 
-def data_path(relpath):
+def data_path(relpath: str):
     return _DATA_DIR / relpath
 
 

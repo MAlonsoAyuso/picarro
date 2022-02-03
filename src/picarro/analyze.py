@@ -6,14 +6,11 @@ import pandas as pd
 import numpy as np
 import scipy.stats
 from picarro.measurements import MeasurementMeta
-from math import isnan
 import logging
 
 logger = logging.getLogger(__name__)
 
 VolumetricFlux = float
-
-TimeSeries = pd.Series
 
 
 @dataclass
@@ -69,7 +66,7 @@ class _FluxEstimatorBase:
     def estimate_vol_flux(self) -> VolumetricFlux:
         raise NotImplementedError()
 
-    def predict(self, times: pd.DatetimeIndex) -> TimeSeries:
+    def predict(self, times: pd.DatetimeIndex) -> pd.Series:
         x = self.transform_time(times, self.config, self.moments)
         y = self.fit_params.intercept + self.fit_params.slope * x
         return pd.Series(data=y, index=times)
@@ -83,7 +80,7 @@ class _FluxEstimatorBase:
         return elapsed
 
     @classmethod
-    def create(cls, data: TimeSeries, config: FluxEstimationConfig):
+    def create(cls, data: pd.Series, config: FluxEstimationConfig):
         column = data.name
         assert isinstance(column, str)
         fit_params, moments, n_samples = cls._fit(data, config)
@@ -92,7 +89,7 @@ class _FluxEstimatorBase:
 
     @classmethod
     def _fit(
-        cls, data: TimeSeries, config: FluxEstimationConfig
+        cls, data: pd.Series, config: FluxEstimationConfig
     ) -> tuple[LinearFit, Moments, int]:
         moments = cls._determine_moments(data, config)
         data_to_fit = data[moments.fit_start : moments.fit_end]
@@ -110,7 +107,7 @@ class _FluxEstimatorBase:
         return fit_params, moments, len(data_to_fit)
 
     @staticmethod
-    def _determine_moments(data: TimeSeries, config: FluxEstimationConfig) -> Moments:
+    def _determine_moments(data: pd.Series, config: FluxEstimationConfig) -> Moments:
         assert isinstance(data.index, pd.DatetimeIndex)
         if len(data) == 0:
             raise ValueError(f"Empty dataset {data}")
@@ -163,9 +160,9 @@ class LinearEstimator(_FluxEstimatorBase):
 
 @dataclass
 class ExponentialEstimator(_FluxEstimatorBase):
-    @classmethod
+    @staticmethod
     def transform_time(
-        cls, times: pd.DatetimeIndex, config: FluxEstimationConfig, moments: Moments
+        times: pd.DatetimeIndex, config: FluxEstimationConfig, moments: Moments
     ) -> np.ndarray:
         # Since estimation is linear, it does not matter what unit we have for time.
         # Referencing here from times[0] for easier debugging: now we know
@@ -203,6 +200,6 @@ class AnalysisResult:
     estimator: FluxEstimator
 
 
-def estimate_flux(config: FluxEstimationConfig, data: TimeSeries) -> FluxEstimator:
+def estimate_flux(config: FluxEstimationConfig, data: pd.Series) -> FluxEstimator:
     cls = ESTIMATORS[config.method]
     return cls.create(data, config)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
+from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple
 import pandas as pd
 from picarro.chunks import (
     Chunk,
@@ -46,7 +46,6 @@ class StitchingConfig:
     max_gap: pd.Timedelta = pd.Timedelta(10, "s")
     min_duration: Optional[pd.Timedelta] = None
     max_duration: Optional[pd.Timedelta] = None
-
 
 
 def _stitch_chunks(

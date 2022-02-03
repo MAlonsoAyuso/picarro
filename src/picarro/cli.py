@@ -1,6 +1,5 @@
-from email.policy import default
 from pathlib import Path
-from typing import List
+from typing import Callable, List
 import click
 import functools
 import os
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_CONFIG_PATH = Path("picarro_config.toml")
 
 
-def handle_exceptions(func):
+def handle_exceptions(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -25,9 +24,7 @@ def handle_exceptions(func):
                 f"Already exists: {e}. Use --force to overwrite."
             )
         except picarro.app.ConfigError as e:
-            raise click.ClickException(
-                f"There is a problem with the config: {e}"
-            )
+            raise click.ClickException(f"There is a problem with the config: {e}")
         except Exception as e:
             logger.exception(f"Unhandled exception: {e}")
             raise click.ClickException(f"Crashed due to an unhandled exception: {e}")
@@ -50,6 +47,7 @@ def add_force_option(func):
         return func(ctx, *args, **kwargs)
 
     return wrapper
+
 
 @click.group()
 @click.pass_context
@@ -125,6 +123,7 @@ def fluxes(ctx: click.Context):
 
     picarro.app.estimate_fluxes(config)
     picarro.app.export_fluxes_csv(config)
+
 
 @cli.command()
 @click.pass_context

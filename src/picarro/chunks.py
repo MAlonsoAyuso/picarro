@@ -111,7 +111,7 @@ ParsedFile = NewType("ParsedFile", pd.DataFrame)
 Chunk = NewType("Chunk", pd.DataFrame)
 
 
-def _read_file(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
+def read_file(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
     logger.debug(f"Reading file {path}")
     d = pd.read_csv(path, sep=r"\s+")
     try:
@@ -183,7 +183,7 @@ def _reindex_timestamp(d):
 
 
 def _split_file(src_path: Path, config: ParsingConfig) -> Iterator[Chunk]:
-    d = _read_file(src_path, config)
+    d = read_file(src_path, config)
     d = d.pipe(_drop_data_between_valves, config=config)
     valve_just_changed = d[config.valve_column].diff() != 0
     valve_change_count = valve_just_changed.cumsum()

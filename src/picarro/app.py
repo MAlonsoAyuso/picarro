@@ -7,7 +7,6 @@ import shutil
 from typing import Iterator, List, Sequence
 import json
 
-from numpy import isin
 from picarro.analyze import (
     ESTIMATORS,
     AnalysisResult,
@@ -137,7 +136,7 @@ def estimate_fluxes(config: AppConfig):
     if not config.flux_estimation:
         raise ConfigError("No flux estimation config specified.")
     path = _prepare_write_path(config, OutItem.fluxes_json)
-    analysis_results = list(_analyze_fluxes(config))
+    analysis_results = list(analyze_fluxes(config))
     columns = {ar.estimator.column for ar in analysis_results}
     n_measurements = len({ar.measurement_meta for ar in analysis_results})
     _save_analysis_results(analysis_results, path)
@@ -157,12 +156,14 @@ def _iter_measurement_pairs(
     )
 
 
-def _analyze_fluxes(config: AppConfig) -> Iterator[AnalysisResult]:
+def analyze_fluxes(config: AppConfig) -> Iterator[AnalysisResult]:
+    assert config.flux_estimation
     for measurement_meta, measurement in _iter_measurement_pairs(config):
         for column in config.flux_estimation.columns:
+            series = measurement[column]
             yield AnalysisResult(
                 measurement_meta,
-                estimate_flux(config.flux_estimation, measurement[column]),
+                estimate_flux(config.flux_estimation, series),
             )
 
 
@@ -212,14 +213,16 @@ def _build_fluxes_dataframe(analysis_results: List[AnalysisResult]) -> pd.DataFr
 def plot_flux_fits(config: AppConfig):
     import matplotlib.pyplot
 
-    out_dir = _prepare_write_path(config, OutItem.flux_plots_dir)
-    out_dir.mkdir(parents=True)
     analysis_results = _load_analysis_results(config)
+    assert config.flux_estimation
     measurement_metas = load_measurement_metas(config)
     measurements = picarro.measurements.read_measurements(
         measurement_metas, config.measurements
     )
     n_measurements = len(measurement_metas)
+
+    out_dir = _prepare_write_path(config, OutItem.flux_plots_dir)
+    out_dir.mkdir(parents=True)
     for measurement in measurements:
         fig = picarro.plot.plot_measurement(
             measurement, config.flux_estimation.columns, analysis_results

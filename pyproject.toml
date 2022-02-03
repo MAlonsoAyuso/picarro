@@ -2,3 +2,20 @@
 # setuptools v46.4.0 supports the `version = attr: examplepackage.__version__`
 requires = ["setuptools >= 46.4.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.pyright]
+exclude = [
+  "**/node_modules",
+  "**/__pycache__",
+]
+include = ["src", "tests"]
+
+typeCheckingMode = "strict"
+reportMissingTypeStubs = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false

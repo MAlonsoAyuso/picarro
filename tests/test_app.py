@@ -16,7 +16,6 @@ import picarro.measurements
 import numpy as np
 import pandas as pd
 
-from picarro.chunks import PicarroColumns
 
 config_example_src = Path(__file__).absolute().parent / "config_example.toml"
 assert config_example_src.exists()
@@ -73,7 +72,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     shutil.copytree(_EXAMPLE_DATA_DIR / "adjacent_files", data_dir)
 
     @call_immediately
-    def test_will_not_overwrite():
+    def test_will_not_overwrite():  # pyright: reportUnusedFunction=false
         # Test that it won't do anything if the output path already exists
         out_path = app_config.output.get_path(OutItem.measurement_metas_json)
         out_dir = out_path.parent
@@ -129,11 +128,9 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
     def test_analysis_working():
         # Test analysis
         assert app_config.flux_estimation
-        analysis_results = list(picarro.app._analyze_fluxes(app_config))
+        analysis_results = list(picarro.app.analyze_fluxes(app_config))
         expected_analysis_results = list(
-            itertools.product(
-                expected_summaries, app_config.flux_estimation.columns
-            )
+            itertools.product(expected_summaries, app_config.flux_estimation.columns)
         )
         seen_analysis_results = [
             (summarize_measurement(ar.measurement_meta), ar.estimator.column)
