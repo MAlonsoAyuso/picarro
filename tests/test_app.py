@@ -143,11 +143,9 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         # Test exporting measurements
         picarro.app.export_measurements(app_config)
         paths = list(app_config.output.get_path(OutItem.measurements_dir).iterdir())
-        assert len(paths) == len(expected_summaries)
-        for path, summary in zip(sorted(paths), expected_summaries):
-            data = pd.read_csv(path, index_col="datetime_utc")
-            assert set(data.columns) >= set(app_config.measurements.extra_columns)
-            assert len(data) == summary["n_samples"]
-            assert str(data[app_config.measurements.valve_column].dtype).startswith(
-                "int"
-            )  # pyright: reportGeneralTypeIssues=false
+        dataset_lengths = {
+            len(pd.read_csv(path, index_col="datetime_utc"))  # type: ignore
+            for path in paths
+        }
+        expected_lengths = {summary["n_samples"] for summary in expected_summaries}
+        assert dataset_lengths == expected_lengths
