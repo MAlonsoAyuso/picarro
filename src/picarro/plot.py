@@ -8,6 +8,10 @@ from picarro.analyze import FluxResult
 from picarro.measurements import Measurement
 import pandas as pd
 
+# Matplotlib TkAgg backend hogs memory and crashes with too many figures:
+# https://github.com/matplotlib/matplotlib/issues/21950
+mpl.use("agg")
+
 with resources.path("picarro.resources", "matplotlib-style") as path:
     mpl.style.use(path)  # pyright: reportGeneralTypeIssues=false
 
