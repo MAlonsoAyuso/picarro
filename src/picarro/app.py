@@ -89,8 +89,6 @@ def identify_and_save_measurement_metas(config: AppConfig) -> None:
         mms = list(picarro.measurements.identify_measurement_metas(config.measurements))
     except picarro.chunks.MissingColumns as e:
         raise ConfigProblem(str(e)) from e
-    except picarro.chunks.InvalidData as e:
-        raise U
     obj = _json_converter.unstructure(mms)
     with open(path, "w") as f:
         json.dump(obj, f)
