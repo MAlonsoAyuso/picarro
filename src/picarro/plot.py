@@ -34,6 +34,8 @@ def plot_measurement(
     columns: Sequence[str],
     flux_results: Iterable[FluxResult] = (),
 ) -> Figure:
+    # Rough calculation of height depending on number of panels;
+    # nothing scientific at all and probably will break down for large numbers.
     height_per_column = 1.7
     height_extra = 1.3
     height_total = height_per_column * len(columns) + height_extra
@@ -50,7 +52,7 @@ def plot_measurement(
     )
 
     fig.suptitle(
-        f"Valve #{measurement_meta.valve_number}: {measurement_meta.valve_label}"
+        f"{measurement_meta.valve_label} (valve #{measurement_meta.valve_number})"
     )
 
     measurement_start = measurement.index[0]
@@ -67,7 +69,9 @@ def plot_measurement(
         ax = ax_by_column[col]
         ax.set_title(_subplot_title(col))
         ax.plot(
-            calculate_elapsed(measurement.index), measurement[col], **_MEASUREMENT_KWS
+            calculate_elapsed(measurement.index),
+            measurement[col],
+            **_MEASUREMENT_KWS,
         )
 
     for flux_result in flux_results:
@@ -79,12 +83,27 @@ def plot_measurement(
         assert isinstance(estimator_times, pd.DatetimeIndex)
         estimated_values = flux_result.estimator.predict(estimator_times)
         ax = ax_by_column[flux_result.estimator.column]
+
+        # Draw fitted function
         ax.plot(
             calculate_elapsed(estimator_times),
             estimated_values,
             lw=2,
             color=_ESTIMATOR_COLORS[flux_result.estimator.config.method],
+            label=f"{flux_result.estimator.config.method} fit",
         )
+
+        # Draw vertical line at t0
+        ax.axvline(
+            [calculate_elapsed(flux_result.estimator.moments.t0)],
+            lw=1,
+            color=_ESTIMATOR_COLORS[flux_result.estimator.config.method],
+            linestyle="--",
+            label="t0",
+        )
+
+    for ax in ax_by_column.values():
+        ax.legend(loc="lower left", bbox_to_anchor=(0, 0))
 
     last_ax = ax_by_column[columns[-1]]
     last_ax.set_xlabel(f"Time elapsed (minutes) since\n{measurement_start}")
