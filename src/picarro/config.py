@@ -79,6 +79,17 @@ class AppConfig:
     output: OutputConfig = field(default_factory=OutputConfig)
     logging: LogSettingsDict = field(default_factory=lambda: DEFAULT_LOG_SETTINGS)
 
+    def __post_init__(self):
+        # For convenience, automatically adding any columns included in flux_estimation
+        # but not included in measurements.extra_columns
+        if self.flux_estimation:
+            add_extra_columns = [
+                c
+                for c in self.flux_estimation.columns
+                if c not in self.measurements.extra_columns
+            ]
+            self.measurements.extra_columns.extend(add_extra_columns)
+
     @classmethod
     def from_toml(cls, path: Path):
         with open(path, "r") as f:
