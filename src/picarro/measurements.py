@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import datetime
 import glob
+import itertools
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
 import pandas as pd
@@ -55,7 +56,33 @@ class MeasurementsConfig(StitchingConfig, ParsingConfig):
     src: Union[str, List[str]] = ""
 
 
-def _stitch_chunks(
+def identify_measurement_metas(config: MeasurementsConfig) -> Iterator[MeasurementMeta]:
+    src_paths = _iter_source_paths(config.src)
+    chunk_metas = itertools.chain(*(read_chunks(path, config) for path in src_paths))
+    return build_measurement_metas(chunk_metas, config)
+
+
+def build_measurement_metas(
+    chunk_metas: Iterable[ChunkMeta], config: StitchingConfig
+) -> Iterator[MeasurementMeta]:
+    mms_stitched = _stitch_chunk_metas(chunk_metas, config)
+    mms_filtered = _filter_measurement_metas(mms_stitched, config)
+    yield from mms_filtered
+
+
+def _iter_source_paths(src: Union[str, List[str]]) -> Iterator[Path]:
+    glob_patterns = src
+    if isinstance(glob_patterns, str):
+        glob_patterns = [glob_patterns]
+    for glob_pattern in glob_patterns:
+        file_paths = list(map(Path, glob.glob(glob_pattern, recursive=True)))
+        logger.info(
+            f"Found {len(file_paths)} source files using pattern {glob_pattern}"
+        )
+        yield from file_paths
+
+
+def _stitch_chunk_metas(
     chunk_metas: Iterable[ChunkMeta], config: StitchingConfig
 ) -> Iterator[MeasurementMeta]:
     chunk_metas = list(chunk_metas)
@@ -84,10 +111,10 @@ def _stitch_chunks(
         yield MeasurementMeta.from_chunk_metas(collected)
 
 
-def stitch_chunk_metas(
-    chunk_metas: Iterable[ChunkMeta], config: StitchingConfig
+def _filter_measurement_metas(
+    measurement_metas: Iterable[MeasurementMeta],
+    config: StitchingConfig,
 ) -> Iterator[MeasurementMeta]:
-    measurement_metas = _stitch_chunks(chunk_metas, config)
     n_skipped = 0
     skipped_min_duration = None
     skipped_max_duration = None
@@ -161,21 +188,3 @@ def read_measurements(
     cache = {}
     for measurement_meta in measurement_metas:
         yield read_measurement(measurement_meta, config, cache)
-
-
-def identify_measurement_metas(config: MeasurementsConfig) -> Iterator[MeasurementMeta]:
-    chunk_metas = _iter_chunk_metas(config)
-    yield from stitch_chunk_metas(chunk_metas, config)
-
-
-def _iter_chunk_metas(config: MeasurementsConfig) -> Iterator[ChunkMeta]:
-    glob_patterns = config.src
-    if isinstance(glob_patterns, str):
-        glob_patterns = [glob_patterns]
-    for glob_pattern in glob_patterns:
-        file_paths = list(map(Path, glob.glob(glob_pattern, recursive=True)))
-        logger.info(
-            f"Found {len(file_paths)} source files using pattern {glob_pattern}"
-        )
-        for path in file_paths:
-            yield from read_chunks(path, config)

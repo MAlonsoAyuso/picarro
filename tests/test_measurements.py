@@ -2,8 +2,9 @@ from __future__ import annotations
 import itertools
 from picarro.config import MeasurementsConfig
 from picarro.measurements import (
+    build_measurement_metas,
+    identify_measurement_metas,
     read_measurements,
-    stitch_chunk_metas,
 )
 from picarro.chunks import read_chunks
 from pathlib import Path
@@ -73,7 +74,7 @@ def _test_measurements_and_summaries_correct(
     paths: list[Path], config: MeasurementsConfig, expected_summaries: list[dict]
 ):
     chunk_metas = itertools.chain(*(read_chunks(path, config) for path in paths))
-    measurement_metas = list(stitch_chunk_metas(chunk_metas, config))
+    measurement_metas = list(build_measurement_metas(chunk_metas, config))
 
     meta_summaries = [
         dict(
