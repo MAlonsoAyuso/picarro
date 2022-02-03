@@ -21,6 +21,7 @@ _SECONDS_PER_MINUTE = 60
 prop_cycle = mpl.rc_params()["axes.prop_cycle"]
 colors = prop_cycle.by_key()["color"]
 _ESTIMATOR_COLORS = dict(zip(ESTIMATORS, colors))
+_MEASUREMENT_KWS = dict(color="k", lw=0, marker=".", markersize=2)
 
 
 def _subplot_title(column):
@@ -65,7 +66,9 @@ def plot_measurement(
     for col in columns:
         ax = ax_by_column[col]
         ax.set_title(_subplot_title(col))
-        ax.plot(calculate_elapsed(measurement.index), measurement[col])
+        ax.plot(
+            calculate_elapsed(measurement.index), measurement[col], **_MEASUREMENT_KWS
+        )
 
     for flux_result in flux_results:
         if flux_result.measurement_meta != measurement_meta:
