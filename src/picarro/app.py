@@ -9,7 +9,7 @@ import json
 
 from picarro.analyze import (
     ESTIMATORS,
-    AnalysisResult,
+    FluxResult,
     FluxEstimator,
     estimate_flux,
 )
@@ -156,30 +156,30 @@ def _iter_measurement_pairs(
     )
 
 
-def analyze_fluxes(config: AppConfig) -> Iterator[AnalysisResult]:
+def analyze_fluxes(config: AppConfig) -> Iterator[FluxResult]:
     assert config.flux_estimation
     for measurement_meta, measurement in _iter_measurement_pairs(config):
         for column in config.flux_estimation.columns:
             series = measurement[column]
-            yield AnalysisResult(
+            yield FluxResult(
                 measurement_meta,
                 estimate_flux(config.flux_estimation, series),
             )
 
 
-def _save_analysis_results(analysis_results: List[AnalysisResult], path: Path):
+def _save_analysis_results(analysis_results: List[FluxResult], path: Path):
     obj = _json_converter.unstructure(analysis_results)
     with open(path, "w") as f:
         json.dump(obj, f)
 
 
-def _load_analysis_results(config: AppConfig) -> List[AnalysisResult]:
+def _load_analysis_results(config: AppConfig) -> List[FluxResult]:
     path = config.output.get_path(OutItem.fluxes_json)
     if not path.exists():
         raise PreviousStepRequired("Cannot load flux analyses before analyzing.")
     with open(path, "r") as f:
         obj = json.load(f)
-    return _json_converter.structure(obj, List[AnalysisResult])
+    return _json_converter.structure(obj, List[FluxResult])
 
 
 def export_fluxes_csv(config: AppConfig):
@@ -192,8 +192,8 @@ def export_fluxes_csv(config: AppConfig):
     logger.info(f"Saved results at {path}")
 
 
-def _build_fluxes_dataframe(analysis_results: List[AnalysisResult]) -> pd.DataFrame:
-    def make_row(analysis_result: AnalysisResult):
+def _build_fluxes_dataframe(analysis_results: List[FluxResult]) -> pd.DataFrame:
+    def make_row(analysis_result: FluxResult):
         return pd.Series(
             dict(
                 start_utc=analysis_result.measurement_meta.start,

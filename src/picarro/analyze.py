@@ -195,7 +195,7 @@ ESTIMATORS: Mapping[str, Type[FluxEstimator]] = {
 
 
 @dataclass
-class AnalysisResult:
+class FluxResult:
     measurement_meta: MeasurementMeta
     estimator: FluxEstimator
 

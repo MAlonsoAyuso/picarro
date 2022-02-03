@@ -4,7 +4,7 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from picarro.analyze import ESTIMATORS
-from picarro.analyze import AnalysisResult
+from picarro.analyze import FluxResult
 from picarro.measurements import Measurement
 import pandas as pd
 
@@ -26,7 +26,7 @@ def _subplot_title(column):
 def plot_measurement(
     data: Measurement,
     columns: Sequence[str],
-    analysis_results: Iterable[AnalysisResult] = (),
+    analysis_results: Iterable[FluxResult] = (),
 ) -> Figure:
     height_per_column = 1.7
     height_extra = 1.3
