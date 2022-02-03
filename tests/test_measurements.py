@@ -1,7 +1,7 @@
 from __future__ import annotations
 import itertools
+from picarro.config import MeasurementsConfig
 from picarro.measurements import (
-    MeasurementsConfig,
     read_measurements,
     stitch_chunk_metas,
 )
@@ -25,18 +25,22 @@ COLUMNS = [
 
 def test_iter_measurement_metas():
     paths = [p for p in (_DATA_DIR / "adjacent_files").iterdir()]
-    config = MeasurementsConfig(columns=COLUMNS, max_gap=pd.Timedelta(5, "s"))
+    config = MeasurementsConfig(
+        valve_column=PicarroColumns.solenoid_valves,
+        columns=COLUMNS,
+        max_gap=pd.Timedelta(5, "s"),
+    )
     # These were established by manually sifting through the files
     expected_summaries = [
-        dict(solenoid_valve=13, n_samples=217),
-        dict(solenoid_valve=14, n_samples=1789),
-        dict(solenoid_valve=15, n_samples=1787),
-        dict(solenoid_valve=1, n_samples=1779),
-        dict(solenoid_valve=2, n_samples=1782),
-        dict(solenoid_valve=3, n_samples=1789),
-        dict(solenoid_valve=4, n_samples=1786),
-        dict(solenoid_valve=5, n_samples=1783),
-        dict(solenoid_valve=6, n_samples=716),
+        dict(valve_number=13, n_samples=217),
+        dict(valve_number=14, n_samples=1789),
+        dict(valve_number=15, n_samples=1787),
+        dict(valve_number=1, n_samples=1779),
+        dict(valve_number=2, n_samples=1782),
+        dict(valve_number=3, n_samples=1789),
+        dict(valve_number=4, n_samples=1786),
+        dict(valve_number=5, n_samples=1783),
+        dict(valve_number=6, n_samples=716),
     ]
 
     _test_measurements_and_summaries_correct(paths, config, expected_summaries)
@@ -44,20 +48,24 @@ def test_iter_measurement_metas():
 
 def test_dont_join_chunks_if_time_gap_is_too_large():
     paths = [p for p in (_DATA_DIR / "adjacent_files").iterdir()]
-    config = MeasurementsConfig(columns=COLUMNS, max_gap=pd.Timedelta(1, "s"))
+    config = MeasurementsConfig(
+        valve_column=PicarroColumns.solenoid_valves,
+        columns=COLUMNS,
+        max_gap=pd.Timedelta(1, "s"),
+    )
     # These were established by manually sifting through the files
     expected_summaries = [
-        dict(solenoid_valve=13, n_samples=217),
-        dict(solenoid_valve=14, n_samples=1789),
-        dict(solenoid_valve=15, n_samples=1787),
-        dict(solenoid_valve=1, n_samples=680),
-        dict(solenoid_valve=1, n_samples=1099),
-        dict(solenoid_valve=2, n_samples=1782),
-        dict(solenoid_valve=3, n_samples=1600),
-        dict(solenoid_valve=3, n_samples=189),
-        dict(solenoid_valve=4, n_samples=1786),
-        dict(solenoid_valve=5, n_samples=1783),
-        dict(solenoid_valve=6, n_samples=716),
+        dict(valve_number=13, n_samples=217),
+        dict(valve_number=14, n_samples=1789),
+        dict(valve_number=15, n_samples=1787),
+        dict(valve_number=1, n_samples=680),
+        dict(valve_number=1, n_samples=1099),
+        dict(valve_number=2, n_samples=1782),
+        dict(valve_number=3, n_samples=1600),
+        dict(valve_number=3, n_samples=189),
+        dict(valve_number=4, n_samples=1786),
+        dict(valve_number=5, n_samples=1783),
+        dict(valve_number=6, n_samples=716),
     ]
 
     _test_measurements_and_summaries_correct(paths, config, expected_summaries)
@@ -71,7 +79,7 @@ def _test_measurements_and_summaries_correct(
 
     meta_summaries = [
         dict(
-            solenoid_valve=mm.solenoid_valve,
+            valve_number=mm.valve_number,
             n_samples=mm.n_samples,
         )
         for mm in measurement_metas
@@ -80,7 +88,7 @@ def _test_measurements_and_summaries_correct(
 
     data_summaries = [
         dict(
-            solenoid_valve=m[PicarroColumns.solenoid_valves].unique()[0],
+            valve_number=m[config.valve_column].unique()[0],
             n_samples=len(m),
         )
         for m in read_measurements(measurement_metas, config)

@@ -22,13 +22,13 @@ class ChunkMeta:
     path: Path
     start: pd.Timestamp
     end: pd.Timestamp
-    solenoid_valve: int
+    valve_number: int
     n_samples: int
 
 
 def read_chunks(src_path: Path, config: ParsingConfig) -> Mapping[ChunkMeta, Chunk]:
     chunks = list(_split_file(src_path, config))
-    chunk_metas = [_build_chunk_meta(chunk, src_path) for chunk in chunks]
+    chunk_metas = [_build_chunk_meta(chunk, src_path, config) for chunk in chunks]
     chunk_map = dict(zip(chunk_metas, chunks))
     logger.debug(f"Read {len(chunk_map)} chunks from {src_path}")
     return chunk_map
@@ -41,6 +41,7 @@ class InvalidRowHandling(Enum):
 
 @dataclass
 class ParsingConfig:
+    valve_column: str
     columns: List[str] = field(default_factory=list)
     null_rows: InvalidRowHandling = InvalidRowHandling.skip
     epoch_time_column: str = "EPOCH_TIME"
@@ -106,7 +107,7 @@ class InvalidData(CannotParse):
 ParsedFile = NewType("ParsedFile", pd.DataFrame)
 
 # Chunk: A DataFrame with a contiguous subset of a DataFile,
-#   with exactly one solenoid valve value.
+#   with exactly one valve number.
 Chunk = NewType("Chunk", pd.DataFrame)
 
 
@@ -150,7 +151,7 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
     return d
 
 
-_ALWAYS_READ_COLUMNS = [PicarroColumns.EPOCH_TIME, PicarroColumns.solenoid_valves]
+_ALWAYS_READ_COLUMNS = [PicarroColumns.EPOCH_TIME]
 
 
 def _get_columns_to_read(user_columns: List[str]) -> List[str]:
@@ -183,26 +184,26 @@ def _reindex_timestamp(d):
 
 def _split_file(src_path: Path, config: ParsingConfig) -> Iterator[Chunk]:
     d = _read_file(src_path, config)
-    d = d.pipe(_drop_data_between_valves)
-    valve_just_changed = d[PicarroColumns.solenoid_valves].diff() != 0
+    d = d.pipe(_drop_data_between_valves, config=config)
+    valve_just_changed = d[config.valve_column].diff() != 0
     valve_change_count = valve_just_changed.cumsum()
     for i, chunk in d.groupby(valve_change_count):  # type: ignore
         yield chunk
 
 
-def _drop_data_between_valves(data: ParsedFile):
-    # Column "solenoid_valves" is sometimes noninteger for a short time when switching
+def _drop_data_between_valves(data: ParsedFile, config: ParsingConfig):
+    # At least "solenoid_valves" is sometimes noninteger for a short time when switching
     # from one valve to the next. Let's drop these data as they cannot be connected
     # to a chamber.
-    valve_num = data[PicarroColumns.solenoid_valves]
+    valve_num = data[config.valve_column]
     is_between_valves = valve_num.astype(int) != valve_num
-    return data[~is_between_valves].astype({PicarroColumns.solenoid_valves: int})
+    return data[~is_between_valves].astype({config.valve_column: int})
 
 
-def _build_chunk_meta(chunk: Chunk, path: Path) -> ChunkMeta:
-    solenoid_valves = chunk[PicarroColumns.solenoid_valves].unique()
-    assert len(solenoid_valves) == 1, solenoid_valves
-    (the_valve,) = solenoid_valves
+def _build_chunk_meta(chunk: Chunk, path: Path, config: ParsingConfig) -> ChunkMeta:
+    valve_numbers = chunk[config.valve_column].unique()
+    assert len(valve_numbers) == 1, valve_numbers
+    (the_valve,) = valve_numbers
     return ChunkMeta(
         path,
         chunk.index[0],

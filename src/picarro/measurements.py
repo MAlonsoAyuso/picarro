@@ -24,19 +24,19 @@ class MeasurementMeta:
     chunks: Tuple[ChunkMeta, ...]
     start: pd.Timestamp
     end: pd.Timestamp
-    solenoid_valve: int
+    valve_number: int
     n_samples: int
 
     @staticmethod
     def from_chunk_metas(chunk_metas: List[ChunkMeta]) -> MeasurementMeta:
-        solenoid_valves = {c.solenoid_valve for c in chunk_metas}
-        assert len(solenoid_valves) == 1, solenoid_valves
-        (solenoid_valve,) = solenoid_valves
+        valve_numbers = {c.valve_number for c in chunk_metas}
+        assert len(valve_numbers) == 1, valve_numbers
+        (valve_number,) = valve_numbers
         return MeasurementMeta(
             tuple(chunk_metas),
             chunk_metas[0].start,
             chunk_metas[-1].end,
-            solenoid_valve,
+            valve_number,
             sum(c.n_samples for c in chunk_metas),
         )
 
@@ -67,7 +67,7 @@ def _stitch_chunks(
                 raise ValueError(f"overlapping chunks: {prev_chunk} {candidate}")
 
             is_adjacent = time_gap < config.max_gap
-            same_valve = prev_chunk.solenoid_valve == candidate.solenoid_valve
+            same_valve = prev_chunk.valve_number == candidate.valve_number
 
             if is_adjacent and same_valve:
                 collected.append(candidate)

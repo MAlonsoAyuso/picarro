@@ -56,7 +56,7 @@ class OutputConfig:
 
 
 @dataclass
-class MeasurementsConfig(ParsingConfig, StitchingConfig):
+class MeasurementsConfig(StitchingConfig, ParsingConfig):
     src: Union[str, List[str]] = ""
 
 

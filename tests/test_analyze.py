@@ -1,9 +1,10 @@
 import pandas as pd
 from picarro.chunks import _read_file, PicarroColumns
-from picarro.measurements import MeasurementsConfig
 from picarro.analyze import FluxEstimationConfig, estimate_flux
 import pathlib
 import numpy as np
+
+from picarro.config import MeasurementsConfig
 
 _DATA_DIR = pathlib.Path(__file__).parent.parent / "example_data"
 
@@ -36,7 +37,9 @@ exponential_config = FluxEstimationConfig(
 )
 
 measurement_config = MeasurementsConfig(
-    src=str(data_path("example_measurement.dat")), columns=["N2O", "CO2"]
+    valve_column=PicarroColumns.solenoid_valves,
+    src=str(data_path("example_measurement.dat")),
+    columns=["N2O", "CO2"],
 )
 
 

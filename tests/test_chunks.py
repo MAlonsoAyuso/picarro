@@ -19,6 +19,7 @@ def data_path(relpath):
 
 
 CONFIG = MeasurementsConfig(
+    valve_column=PicarroColumns.solenoid_valves,
     columns=[
         PicarroColumns.solenoid_valves,
         PicarroColumns.EPOCH_TIME,
@@ -36,11 +37,11 @@ def test_require_unique_timestamps():
         _read_file(data_path("duplicate_timestamp.dat"), CONFIG)
 
 
-def test_chunks_have_unique_int_solenoid_valves():
+def test_chunks_have_unique_int_valve_numbers():
     for chunk_meta, chunk in read_chunks(data_path("example.dat"), CONFIG).items():
-        solenoid_valves = chunk[PicarroColumns.solenoid_valves]
-        assert solenoid_valves.dtype == int  # type: ignore
-        assert len(solenoid_valves.unique()) == 1
+        valve_numbers = chunk[CONFIG.valve_column]
+        assert valve_numbers.dtype == int  # type: ignore
+        assert len(valve_numbers.unique()) == 1
 
 
 def test_chunk_metadata_is_correct():
@@ -52,21 +53,21 @@ def test_chunk_metadata_is_correct():
             path=path,
             start=pd.Timestamp("2021-05-07 00:01:15.170"),
             end=pd.Timestamp("2021-05-07 00:02:19.338000"),
-            solenoid_valve=5,
+            valve_number=5,
             n_samples=81,
         ),
         ChunkMeta(
             path=path,
             start=pd.Timestamp("2021-05-07 00:02:21.696"),
             end=pd.Timestamp("2021-05-07 00:22:19.405000"),
-            solenoid_valve=6,
+            valve_number=6,
             n_samples=1487,
         ),
         ChunkMeta(
             path=path,
             start=pd.Timestamp("2021-05-07 00:22:20.719"),
             end=pd.Timestamp("2021-05-07 00:24:23.092000"),
-            solenoid_valve=7,
+            valve_number=7,
             n_samples=152,
         ),
     ]

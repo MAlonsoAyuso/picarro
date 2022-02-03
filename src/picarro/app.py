@@ -197,7 +197,7 @@ def _build_fluxes_dataframe(analysis_results: List[AnalysisResult]) -> pd.DataFr
             dict(
                 start_utc=analysis_result.measurement_meta.start,
                 end_utc=analysis_result.measurement_meta.end,
-                solenoid_valve=analysis_result.measurement_meta.solenoid_valve,
+                valve_number=analysis_result.measurement_meta.valve_number,
                 column=analysis_result.estimator.column,
                 vol_flux=analysis_result.estimator.estimate_vol_flux(),
                 n_samples_total=analysis_result.measurement_meta.n_samples,

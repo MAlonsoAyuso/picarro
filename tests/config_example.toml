@@ -1,4 +1,5 @@
 [measurements]
+valve_column = "solenoid_valves"
 columns = ["N2O", "CH4", "CO2", "EPOCH_TIME", "solenoid_valves"]
 src = "data-dir/**/*.dat"
 max_gap = 5
