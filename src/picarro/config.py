@@ -42,6 +42,7 @@ def structure_timedelta(v, _):
 _toml_converter = cattr.preconf.tomlkit.make_converter()
 _toml_converter.register_structure_hook(pd.Timedelta, structure_timedelta)
 _toml_converter.register_structure_hook(Union[str, List[str]], lambda v, _: v)
+_toml_converter.register_structure_hook(Path, lambda v, _: Path(v))
 
 
 class OutItem(Enum):
