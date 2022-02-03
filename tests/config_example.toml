@@ -3,14 +3,14 @@ valve_column = "solenoid_valves"
 extra_columns = ["N2O", "CH4", "CO2"]
 src = "data-dir/**/*.dat"
 max_gap = 5
-min_duration = 1080 # 18 minutes
+min_duration = "00:18:00" # 18 minutes
 # max_duration = 1320 # 22 minutes
 
 [flux_estimation]
 columns = ["N2O", "CH4"]
 method = "linear"
-t0_delay = 480
-t0_margin = 120
+t0_delay = "08:00" # 8 minutes
+t0_margin = 120 # seconds
 A = 0.25
 Q = 4.16e-6
 V = 50e-3

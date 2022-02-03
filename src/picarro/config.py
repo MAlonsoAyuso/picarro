@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
+import re
 from typing import (
     Dict,
     Optional,
@@ -12,6 +13,7 @@ import toml
 import cattr.preconf.tomlkit
 import pandas as pd
 import logging
+from picarro.core import ConfigProblem
 from picarro.fluxes import FluxEstimationConfig
 from picarro.logging import DEFAULT_LOG_SETTINGS, LogSettingsDict
 from picarro.measurements import MeasurementsConfig
@@ -20,10 +22,25 @@ logger = logging.getLogger(__name__)
 
 CONFIG_FILE_TIME_UNIT = "s"
 
+
+def structure_timedelta(v, _):
+    if isinstance(v, (int, float)):
+        return pd.Timedelta(v, CONFIG_FILE_TIME_UNIT)
+    elif isinstance(v, str):
+        hh_mm_ss = re.fullmatch(r"\d\d:\d\d:\d\d", v)
+        if hh_mm_ss:
+            return pd.Timedelta(v)
+        mm_ss = re.fullmatch(r"\d\d:\d\d", v)
+        if mm_ss:
+            return pd.Timedelta(f"00:{v}")
+
+        raise ConfigProblem(
+            f"Cannot parse timedelta {v}. Use format hh:mm:ss or mm:ss."
+        )
+
+
 _toml_converter = cattr.preconf.tomlkit.make_converter()
-_toml_converter.register_structure_hook(
-    pd.Timedelta, lambda v, _: pd.Timedelta(v, CONFIG_FILE_TIME_UNIT)
-)
+_toml_converter.register_structure_hook(pd.Timedelta, structure_timedelta)
 _toml_converter.register_structure_hook(Union[str, List[str]], lambda v, _: v)
 
 
