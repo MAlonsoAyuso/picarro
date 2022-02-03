@@ -15,7 +15,7 @@ from picarro.chunks import (
 )
 import logging
 
-from picarro.core import ConfigProblem
+from picarro.core import ConfigProblem, DataProcessingProblem
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ def _iter_source_paths(src: Union[str, List[str]]) -> Iterator[Path]:
     for glob_pattern in glob_patterns:
         file_paths = list(map(Path, glob.glob(glob_pattern, recursive=True)))
         logger.info(
-            f"Found {len(file_paths)} source files using pattern {glob_pattern}"
+            f"Found {len(file_paths)} source files using pattern {glob_pattern!r}."
         )
         yield from file_paths
 
@@ -131,7 +131,9 @@ def _stitch_chunk_metas(
 
             time_gap = candidate.start - prev_chunk.end  # type: ignore
             if time_gap < pd.Timedelta(0):
-                raise ValueError(f"overlapping chunks: {prev_chunk} {candidate}")
+                raise DataProcessingProblem(
+                    f"Overlapping chunks: {prev_chunk} {candidate}"
+                )
 
             is_adjacent = time_gap < config.max_gap
             same_valve = prev_chunk.valve_number == candidate.valve_number
@@ -139,7 +141,11 @@ def _stitch_chunk_metas(
             if is_adjacent and same_valve:
                 collected.append(candidate)
             else:
-                chunk_metas.insert(0, candidate)
+                if same_valve:
+                    logger.debug(
+                        f"Not connecting chunks with a gap of {time_gap} "
+                        f"starting at {prev_chunk.end}.")
+                chunk_metas.insert(0, candidate) # put the candidate back in the list
                 break
 
         yield MeasurementMeta.from_chunk_metas(collected, config.valve_labels)

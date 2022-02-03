@@ -9,6 +9,8 @@ from picarro.chunks import (
 from pathlib import Path
 import pandas as pd
 
+from picarro.core import DataProcessingProblem
+
 _DATA_DIR = Path(__file__).parent.parent / "example_data"
 
 
@@ -29,7 +31,7 @@ def test_read_raw():
 
 
 def test_require_unique_timestamps():
-    with pytest.raises(ValueError):
+    with pytest.raises(DataProcessingProblem):
         read_file(data_path("duplicate_timestamp.dat"), CONFIG)
 
 

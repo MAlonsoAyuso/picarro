@@ -16,6 +16,8 @@ import logging
 from dataclasses import field
 import pandas as pd
 
+from picarro.core import DataProcessingProblem
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,18 +59,6 @@ Column = str
 _DATETIME64_UNIT = "ms"
 
 
-class ParsingProblem(ValueError):
-    pass
-
-
-class InvalidData(ParsingProblem):
-    pass
-
-
-class MissingColumns(ValueError):
-    pass
-
-
 # ParsedFile: A DataFrame from a whole .dat file (after some basic parsing)
 ParsedFile = NewType("ParsedFile", pd.DataFrame)
 
@@ -76,22 +66,29 @@ ParsedFile = NewType("ParsedFile", pd.DataFrame)
 #   with exactly one valve number.
 Chunk = NewType("Chunk", pd.DataFrame)
 
+_PANDAS_MISSING_COLS_START = (
+    "Usecols do not match columns, columns expected but not found: "
+)
+
 
 def read_file(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
-    logger.debug(f"Reading file {path}")
+    logger.debug(f"Reading file {path!r}.")
     try:
         d = pd.read_csv(path, sep=r"\s+", usecols=_get_columns_to_read(config))
     except ValueError as e:
         msg = str(e)
-        if msg.startswith("Usecols do not match columns, columns expected"):
-            msg = msg.replace("Usecols do not match columns, ", "")
-            raise MissingColumns(msg) from e
+        if msg.startswith(_PANDAS_MISSING_COLS_START):
+            columns_str = msg.replace(_PANDAS_MISSING_COLS_START, "")
+            raise DataProcessingProblem(
+                f"Columns {columns_str} not found in '{path}'."
+            ) from e
         else:
             raise
     try:
         d = _clean_raw_data(d, config, path)
     except Exception as e:
-        raise ParsingProblem(f"{path}: {e}") from e
+        logger.exception(f"Unhandled problem processing {path}: {e}.")
+        raise DataProcessingProblem(f"Unhandled problem processing {path}: {e}.") from e
     return ParsedFile(d)
 
 
@@ -113,13 +110,17 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig, path: Path) -> pd.Da
     if row_has_null.any():
         if config.null_rows == InvalidRowHandling.error:
             row_num = row_has_null.loc[lambda x: x].index[0]
-            raise InvalidData(f"Missing value(s) in row {row_num}. {d.loc[row_num]}")
+            raise DataProcessingProblem(
+                f"Missing value(s) in row {row_num} in '{path}'."
+            )
         elif config.null_rows == InvalidRowHandling.skip:
             n_violators = row_has_null.sum()
-            logger.debug(f"Skipping {n_violators} line(s) with null values in {path}.")
+            logger.debug(
+                f"Skipping {n_violators} line(s) with null values in {path!r}."
+            )
             if n_violators > 1:
                 logger.warning(
-                    f"Skipping {n_violators} lines with null values in {path}."
+                    f"Skipping {n_violators} lines with null values in {path!r}."
                 )
             d = d.loc[~row_has_null]
 

@@ -6,7 +6,7 @@ import os
 import picarro.config
 import picarro.app
 import logging
-from picarro.core import ConfigProblem
+from picarro.core import ConfigProblem, DataProcessingProblem
 
 from picarro.measurements import MeasurementMeta
 
@@ -26,6 +26,8 @@ def handle_exceptions(func: Callable) -> Callable:
             )
         except ConfigProblem as e:
             raise click.ClickException(f"There is a problem with the config: {e}")
+        except DataProcessingProblem as e:
+            raise click.ClickException(f"There was a problem processing the data: {e}")
         except picarro.app.PreviousStepRequired as e:
             raise click.ClickException(
                 f"A previous step is required before running this command: {e}"
@@ -112,9 +114,9 @@ def _summarize_measurements_meta(measurement_metas: List[MeasurementMeta]) -> st
     chunks = {chunk for mm in measurement_metas for chunk in mm.chunks}
     paths = {chunk.path for chunk in chunks}
     return (
-        f"{len(measurement_metas)} measurement(s) "
+        f"Built {len(measurement_metas)} measurement(s) "
         f"from {len(chunks)} chunk(s) "
-        f"in {len(paths)} file(s)"
+        f"in {len(paths)} file(s)."
     )
 
 

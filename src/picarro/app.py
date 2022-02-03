@@ -67,11 +67,11 @@ def setup_logging(config: AppConfig):
 
 def _prepare_write_path(config: AppConfig, item: OutItem) -> Path:
     path = config.output.get_path(item)
-    logger.debug(f"Preparing write {item} at {path}")
+    logger.debug(f"Preparing write {item} at {path!r}.")
     if path.exists():
         if not config.output.force:
             raise PicarroPathExists(path)
-        logger.debug(f"Removing {path}")
+        logger.debug(f"Removing {path!r}.")
         if path.is_file():
             os.remove(path)
         elif path.is_dir():
@@ -83,10 +83,7 @@ def _prepare_write_path(config: AppConfig, item: OutItem) -> Path:
 
 def identify_and_save_measurement_metas(config: AppConfig) -> None:
     path = _prepare_write_path(config, OutItem.measurement_metas_json)
-    try:
-        mms = list(picarro.measurements.identify_measurement_metas(config.measurements))
-    except picarro.chunks.MissingColumns as e:
-        raise ConfigProblem(str(e)) from e
+    mms = list(picarro.measurements.identify_measurement_metas(config.measurements))
     obj = _json_converter.unstructure(mms)
     with open(path, "w") as f:
         json.dump(obj, f)
@@ -113,9 +110,9 @@ def export_measurements(config: AppConfig):
             measurement = read_measurement(measurement_meta, config.measurements, cache)
             filename_stem = _build_measurement_file_name_stem(measurement_meta)
             out_path = out_dir / f"{filename_stem}.csv"
-            logger.debug(f"Writing measurement to file {out_path}.")
+            logger.debug(f"Writing measurement to file {out_path!r}.")
             measurement.to_csv(out_path)
-    logger.info(f"Wrote {len(measurement_metas)} measurement(s) to files.")
+    logger.info(f"Saved {len(measurement_metas)} measurement(s) in '{out_dir}'.")
 
 
 def estimate_and_save_fluxes(config: AppConfig):
@@ -123,19 +120,17 @@ def estimate_and_save_fluxes(config: AppConfig):
         raise ConfigProblem("No flux estimation config specified.")
     path = _prepare_write_path(config, OutItem.fluxes_json)
     flux_results = list(estimate_fluxes(config))
-    columns = {ar.estimator.column for ar in flux_results}
-    n_measurements = len({ar.measurement_meta for ar in flux_results})
     _save_flux_results(flux_results, path)
-    logger.info(
-        f"Estimated {len(flux_results)} fluxes ({', '.join(columns)}) "
-        f"in {n_measurements} measurements."
-    )
 
 
 def estimate_fluxes(config: AppConfig) -> Iterator[FluxResult]:
     if not config.flux_estimation:
         raise ConfigProblem("No flux estimation config specified.")
     measurement_metas = load_measurement_metas(config)
+    logger.info(
+        f"Estimating fluxes ({', '.join(config.flux_estimation.columns)}) "
+        f"in {len(measurement_metas)} measurements."
+    )
     measurements = read_measurements(measurement_metas, config.measurements)
     for measurement_meta, measurement in zip(measurement_metas, measurements):
         for column in config.flux_estimation.columns:
@@ -168,7 +163,7 @@ def export_fluxes_csv(config: AppConfig):
 
     data = build_fluxes_dataframe(flux_results)
     data.to_csv(path, index=False)
-    logger.info(f"Saved results at {path}")
+    logger.info(f"Saved {len(data)} flux estimates at '{path}'.")
 
 
 def _get_flux_results_by_measurement(
