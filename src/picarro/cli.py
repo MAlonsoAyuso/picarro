@@ -95,7 +95,7 @@ def measurements(ctx: click.Context, identify: bool, export: bool):
     assert isinstance(config, picarro.config.AppConfig), config
 
     if identify:
-        picarro.app.identify_measurements(config)
+        picarro.app.identify_and_save_measurement_metas(config)
         measurement_metas = picarro.app.load_measurement_metas(config)
         logger.info(_summarize_measurements_meta(measurement_metas))
 

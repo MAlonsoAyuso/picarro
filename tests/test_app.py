@@ -79,7 +79,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         out_dir.mkdir()
         out_path.touch()
         with pytest.raises(picarro.app.PicarroPathExists):
-            picarro.app.identify_measurements(app_config)
+            picarro.app.identify_and_save_measurement_metas(app_config)
         os.remove(out_path)
 
     # These were established by manually sifting through the files
@@ -95,7 +95,7 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         # one removed here compared to the full set, because it's too short
     ]
 
-    picarro.app.identify_measurements(app_config)
+    picarro.app.identify_and_save_measurement_metas(app_config)
 
     @call_immediately
     def test_measurement_metadata():

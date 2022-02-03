@@ -1,20 +1,23 @@
 from __future__ import annotations
-import glob
-import itertools
 import os
 from pathlib import Path
 import shutil
-from typing import Iterator, List, Sequence
+from typing import Iterator, List
 import json
 
 from picarro.analyze import (
     ESTIMATORS,
     FluxResult,
     FluxEstimator,
+    build_fluxes_dataframe,
     estimate_flux,
 )
 from picarro.config import AppConfig, OutItem
-from picarro.measurements import Measurement, MeasurementMeta
+from picarro.measurements import (
+    Measurement,
+    MeasurementMeta,
+    read_measurements,
+)
 import picarro.measurements
 import picarro.chunks
 import picarro.plot
@@ -78,32 +81,12 @@ def _prepare_write_path(config: AppConfig, item: OutItem) -> Path:
     return path
 
 
-def identify_measurements(config: AppConfig) -> None:
+def identify_and_save_measurement_metas(config: AppConfig) -> None:
     path = _prepare_write_path(config, OutItem.measurement_metas_json)
-    chunk_metas = _iter_chunk_metas(config)
-    measurement_metas = list(
-        picarro.measurements.stitch_chunk_metas(chunk_metas, config.measurements)
-    )
-    _save_measurement_metas(measurement_metas, path)
-
-
-def _save_measurement_metas(measurement_metas: Sequence[MeasurementMeta], path: Path):
-    obj = _json_converter.unstructure(measurement_metas)
+    mms = list(picarro.measurements.identify_measurement_metas(config.measurements))
+    obj = _json_converter.unstructure(mms)
     with open(path, "w") as f:
         json.dump(obj, f)
-
-
-def _iter_chunk_metas(config: AppConfig) -> Iterator[picarro.chunks.ChunkMeta]:
-    glob_patterns = config.measurements.src
-    if isinstance(glob_patterns, str):
-        glob_patterns = [glob_patterns]
-    for glob_pattern in glob_patterns:
-        file_paths = list(map(Path, glob.glob(glob_pattern, recursive=True)))
-        logger.info(
-            f"Found {len(file_paths)} source files using pattern {glob_pattern}"
-        )
-        for path in file_paths:
-            yield from picarro.chunks.read_chunks(path, config.measurements)
 
 
 def load_measurement_metas(config: AppConfig) -> List[MeasurementMeta]:
@@ -146,19 +129,11 @@ def estimate_fluxes(config: AppConfig):
     )
 
 
-def _iter_measurement_pairs(
-    config: AppConfig,
-) -> Iterator[tuple[MeasurementMeta, Measurement]]:
-    mms = load_measurement_metas(config)
-    mms_1, mms_2 = itertools.tee(mms)
-    return zip(
-        mms_1, picarro.measurements.read_measurements(mms_2, config.measurements)
-    )
-
-
 def analyze_fluxes(config: AppConfig) -> Iterator[FluxResult]:
     assert config.flux_estimation
-    for measurement_meta, measurement in _iter_measurement_pairs(config):
+    measurement_metas = load_measurement_metas(config)
+    measurements = read_measurements(measurement_metas, config.measurements)
+    for measurement_meta, measurement in zip(measurement_metas, measurements):
         for column in config.flux_estimation.columns:
             series = measurement[column]
             yield FluxResult(
@@ -187,27 +162,9 @@ def export_fluxes_csv(config: AppConfig):
 
     analysis_results = _load_analysis_results(config)
 
-    data = _build_fluxes_dataframe(analysis_results)
+    data = build_fluxes_dataframe(analysis_results)
     data.to_csv(path, index=False)
     logger.info(f"Saved results at {path}")
-
-
-def _build_fluxes_dataframe(analysis_results: List[FluxResult]) -> pd.DataFrame:
-    def make_row(analysis_result: FluxResult):
-        return pd.Series(
-            dict(
-                start_utc=analysis_result.measurement_meta.start,
-                end_utc=analysis_result.measurement_meta.end,
-                valve_number=analysis_result.measurement_meta.valve_number,
-                column=analysis_result.estimator.column,
-                vol_flux=analysis_result.estimator.estimate_vol_flux(),
-                n_samples_total=analysis_result.measurement_meta.n_samples,
-                n_samples_flux_estimate=analysis_result.estimator.n_samples,
-            )
-        )
-
-    rows = list(map(make_row, analysis_results))
-    return pd.DataFrame(rows)
 
 
 def plot_flux_fits(config: AppConfig):
@@ -216,10 +173,8 @@ def plot_flux_fits(config: AppConfig):
     analysis_results = _load_analysis_results(config)
     assert config.flux_estimation
     measurement_metas = load_measurement_metas(config)
-    measurements = picarro.measurements.read_measurements(
-        measurement_metas, config.measurements
-    )
     n_measurements = len(measurement_metas)
+    measurements = read_measurements(measurement_metas, config.measurements)
 
     out_dir = _prepare_write_path(config, OutItem.flux_plots_dir)
     out_dir.mkdir(parents=True)

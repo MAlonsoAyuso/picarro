@@ -1,7 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import glob
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
 import pandas as pd
 from picarro.chunks import (
     Chunk,
@@ -46,6 +47,11 @@ class StitchingConfig:
     max_gap: pd.Timedelta = pd.Timedelta(10, "s")
     min_duration: Optional[pd.Timedelta] = None
     max_duration: Optional[pd.Timedelta] = None
+
+
+@dataclass
+class MeasurementsConfig(StitchingConfig, ParsingConfig):
+    src: Union[str, List[str]] = ""
 
 
 def _stitch_chunks(
@@ -104,11 +110,13 @@ def stitch_chunk_metas(
         yield measurement_meta
 
 
-def read_measurements(
-    measurement_metas: Iterable[MeasurementMeta],
+def read_measurement(
+    measurement_meta: MeasurementMeta,
     config: ParsingConfig,
-) -> Iterator[Measurement]:
-    read_cache: Dict[ChunkMeta, Chunk] = {}
+    read_cache: Optional[Dict[ChunkMeta, Chunk]] = None,
+) -> Measurement:
+    if read_cache is None:
+        read_cache = {}
 
     def read_chunks_into_cache(path: Path):
         read_cache.clear()
@@ -119,9 +127,34 @@ def read_measurements(
             read_chunks_into_cache(chunk_meta.path)
         return read_cache[chunk_meta]
 
+    measurement = pd.concat(list(map(read_chunk, measurement_meta.chunks)))
+    debug_info = (measurement_meta, measurement.index)
+    assert measurement_meta.start == measurement.index[0], debug_info
+    assert measurement_meta.end == measurement.index[-1], debug_info
+    return Measurement(measurement)
+
+
+def read_measurements(
+    measurement_metas: Iterable[MeasurementMeta], config: ParsingConfig
+) -> Iterable[Measurement]:
+    cache = {}
     for measurement_meta in measurement_metas:
-        measurement = pd.concat(list(map(read_chunk, measurement_meta.chunks)))
-        debug_info = (measurement_meta, measurement.index)
-        assert measurement_meta.start == measurement.index[0], debug_info
-        assert measurement_meta.end == measurement.index[-1], debug_info
-        yield Measurement(measurement)
+        yield read_measurement(measurement_meta, config, cache)
+
+
+def identify_measurement_metas(config: MeasurementsConfig) -> Iterator[MeasurementMeta]:
+    chunk_metas = _iter_chunk_metas(config)
+    yield from stitch_chunk_metas(chunk_metas, config)
+
+
+def _iter_chunk_metas(config: MeasurementsConfig) -> Iterator[ChunkMeta]:
+    glob_patterns = config.src
+    if isinstance(glob_patterns, str):
+        glob_patterns = [glob_patterns]
+    for glob_pattern in glob_patterns:
+        file_paths = list(map(Path, glob.glob(glob_pattern, recursive=True)))
+        logger.info(
+            f"Found {len(file_paths)} source files using pattern {glob_pattern}"
+        )
+        for path in file_paths:
+            yield from read_chunks(path, config)
