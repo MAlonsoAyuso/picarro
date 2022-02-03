@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import datetime
 import glob
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
@@ -87,27 +88,47 @@ def stitch_chunk_metas(
     chunk_metas: Iterable[ChunkMeta], config: StitchingConfig
 ) -> Iterator[MeasurementMeta]:
     measurement_metas = _stitch_chunks(chunk_metas, config)
-
+    n_skipped = 0
+    skipped_min_duration = None
+    skipped_max_duration = None
+    skipped_total_duration = datetime.timedelta(0)
+    total_duration = datetime.timedelta(0)
     for measurement_meta in measurement_metas:
         duration = measurement_meta.end - measurement_meta.start  # type: ignore
+        total_duration += duration
         min_duration = config.min_duration
         max_duration = config.max_duration
         if (min_duration and duration < min_duration) or (
             max_duration and max_duration < duration
         ):
-            logger.warning(
-                f"Skipping measurement at {measurement_meta.start:%Y-%m-%d %H:%M:%S} "
-                f"with duration {duration}."
+            n_skipped += 1
+            skipped_total_duration += duration
+            skipped_min_duration = (
+                duration
+                if not skipped_min_duration
+                else min(skipped_min_duration, duration)
+            )
+            skipped_max_duration = (
+                duration
+                if not skipped_max_duration
+                else max(skipped_max_duration, duration)
             )
             logger.debug(
-                f"Skipping measurement {measurement_meta}. "
-                f"duration={duration}; "
-                f"min_duration={min_duration}; "
-                f"max_duration={max_duration}"
+                f"Skipping measurement at {measurement_meta.start:%Y-%m-%d %H:%M:%S} "
+                f"with duration{duration}."
             )
             continue
 
         yield measurement_meta
+    if n_skipped:
+        skipped_share = skipped_total_duration / total_duration
+        logger.warning(
+            f"Skipped {n_skipped} measurement(s) "
+            f"with a total duration of {skipped_total_duration} "
+            f"({skipped_share:.1%} of the time). "
+            f"Average duration of skipped measurement: "
+            f"{skipped_total_duration/n_skipped}."
+        )
 
 
 def read_measurement(

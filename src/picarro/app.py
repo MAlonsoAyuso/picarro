@@ -44,15 +44,15 @@ _json_converter.register_structure_hook(
 )
 
 
-class ConfigError(FileExistsError):
+class ConfigProblem(Exception):
     pass
 
 
-class PicarroPathExists(FileExistsError):
+class PicarroPathExists(Exception):
     pass
 
 
-class PreviousStepRequired(RuntimeError):
+class PreviousStepRequired(Exception):
     pass
 
 
@@ -83,7 +83,12 @@ def _prepare_write_path(config: AppConfig, item: OutItem) -> Path:
 
 def identify_and_save_measurement_metas(config: AppConfig) -> None:
     path = _prepare_write_path(config, OutItem.measurement_metas_json)
-    mms = list(picarro.measurements.identify_measurement_metas(config.measurements))
+    try:
+        mms = list(picarro.measurements.identify_measurement_metas(config.measurements))
+    except picarro.chunks.MissingColumns as e:
+        raise ConfigProblem(str(e)) from e
+    except picarro.chunks.InvalidData as e:
+        raise U
     obj = _json_converter.unstructure(mms)
     with open(path, "w") as f:
         json.dump(obj, f)
@@ -92,9 +97,7 @@ def identify_and_save_measurement_metas(config: AppConfig) -> None:
 def load_measurement_metas(config: AppConfig) -> List[MeasurementMeta]:
     path = config.output.get_path(OutItem.measurement_metas_json)
     if not path.exists():
-        raise PreviousStepRequired(
-            "Cannot load measurements before analyzing input data."
-        )
+        raise PreviousStepRequired("Must identify measurements first.")
     with open(path, "r") as f:
         obj = json.load(f)
     return _json_converter.structure(obj, List[MeasurementMeta])
@@ -117,7 +120,7 @@ def export_measurements(config: AppConfig):
 
 def estimate_fluxes(config: AppConfig):
     if not config.flux_estimation:
-        raise ConfigError("No flux estimation config specified.")
+        raise ConfigProblem("No flux estimation config specified.")
     path = _prepare_write_path(config, OutItem.fluxes_json)
     analysis_results = list(analyze_fluxes(config))
     columns = {ar.estimator.column for ar in analysis_results}
@@ -130,7 +133,8 @@ def estimate_fluxes(config: AppConfig):
 
 
 def analyze_fluxes(config: AppConfig) -> Iterator[FluxResult]:
-    assert config.flux_estimation
+    if not config.flux_estimation:
+        raise ConfigProblem("No flux estimation config specified.")
     measurement_metas = load_measurement_metas(config)
     measurements = read_measurements(measurement_metas, config.measurements)
     for measurement_meta, measurement in zip(measurement_metas, measurements):
@@ -151,7 +155,7 @@ def _save_analysis_results(analysis_results: List[FluxResult], path: Path):
 def _load_analysis_results(config: AppConfig) -> List[FluxResult]:
     path = config.output.get_path(OutItem.fluxes_json)
     if not path.exists():
-        raise PreviousStepRequired("Cannot load flux analyses before analyzing.")
+        raise PreviousStepRequired("Must estimate fluxes first.")
     with open(path, "r") as f:
         obj = json.load(f)
     return _json_converter.structure(obj, List[FluxResult])

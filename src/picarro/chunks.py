@@ -57,11 +57,15 @@ Column = str
 _DATETIME64_UNIT = "ms"
 
 
-class CannotParse(ValueError):
+class ParsingProblem(ValueError):
     pass
 
 
-class InvalidData(CannotParse):
+class InvalidData(ParsingProblem):
+    pass
+
+
+class MissingColumns(ValueError):
     pass
 
 
@@ -75,11 +79,19 @@ Chunk = NewType("Chunk", pd.DataFrame)
 
 def read_file(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
     logger.debug(f"Reading file {path}")
-    d = pd.read_csv(path, sep=r"\s+", usecols=_get_columns_to_read(config))
     try:
-        d = _clean_raw_data(d, config)
+        d = pd.read_csv(path, sep=r"\s+", usecols=_get_columns_to_read(config))
+    except ValueError as e:
+        msg = str(e)
+        if msg.startswith("Usecols do not match columns, columns expected"):
+            msg = msg.replace("Usecols do not match columns, ", "")
+            raise MissingColumns(msg) from e
+        else:
+            raise
+    try:
+        d = _clean_raw_data(d, config, path)
     except Exception as e:
-        raise CannotParse(f"{path}: {e}") from e
+        raise ParsingProblem(f"{path}: {e}") from e
     return ParsedFile(d)
 
 
@@ -89,7 +101,7 @@ def _get_columns_to_read(config: ParsingConfig) -> List[str]:
     )
 
 
-def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
+def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig, path: Path) -> pd.DataFrame:
     file_line_numbers = pd.RangeIndex(2, len(d) + 2)  # for debugging
     d = d.set_index(file_line_numbers)
 
@@ -100,13 +112,15 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
     row_has_null = d.isnull().any(axis=1)
     if row_has_null.any():
         if config.null_rows == InvalidRowHandling.error:
-            row_num = row_has_null.loc[lambda x: x].index[
-                0
-            ]  # pyright: reportGeneralTypeIssues=false
+            row_num = row_has_null.loc[lambda x: x].index[0]
             raise InvalidData(f"Missing value(s) in row {row_num}. {d.loc[row_num]}")
         elif config.null_rows == InvalidRowHandling.skip:
             n_violators = row_has_null.sum()
-            logger.warning(f"Skipping {n_violators} lines with null values.")
+            logger.debug(f"Skipping {n_violators} line(s) with null values in {path}.")
+            if n_violators > 1:
+                logger.warning(
+                    f"Skipping {n_violators} lines with null values in {path}."
+                )
             d = d.loc[~row_has_null]
 
     return d

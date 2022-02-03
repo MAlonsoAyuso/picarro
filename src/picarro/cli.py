@@ -23,8 +23,12 @@ def handle_exceptions(func: Callable) -> Callable:
             raise click.ClickException(
                 f"Already exists: {e}. Use --force to overwrite."
             )
-        except picarro.app.ConfigError as e:
+        except picarro.app.ConfigProblem as e:
             raise click.ClickException(f"There is a problem with the config: {e}")
+        except picarro.app.PreviousStepRequired as e:
+            raise click.ClickException(
+                f"A previous step is required before running this command: {e}"
+            )
         except Exception as e:
             logger.exception(f"Unhandled exception: {e}")
             raise click.ClickException(f"Crashed due to an unhandled exception: {e}")
