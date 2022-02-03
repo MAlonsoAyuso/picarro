@@ -6,6 +6,11 @@ max_gap = 5
 min_duration = "00:18:00" # 18 minutes
 # max_duration = 1320 # 22 minutes
 
+[measurements.filter_rows.CH4]
+min = 3.3
+max = 5.5
+
+
 [flux_estimation]
 columns = ["N2O", "CH4"]
 method = "linear"

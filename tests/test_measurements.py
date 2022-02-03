@@ -36,12 +36,12 @@ def test_iter_measurement_metas():
         dict(valve_number=13, n_samples=217),
         dict(valve_number=14, n_samples=1789),
         dict(valve_number=15, n_samples=1787),
-        dict(valve_number=1, n_samples=1779),
+        dict(valve_number=1, n_samples=1776),  # chunks from two files joined
         dict(valve_number=2, n_samples=1782),
-        dict(valve_number=3, n_samples=1789),
+        dict(valve_number=3, n_samples=1785),  # chunks from two files joined
         dict(valve_number=4, n_samples=1786),
         dict(valve_number=5, n_samples=1783),
-        dict(valve_number=6, n_samples=716),
+        dict(valve_number=6, n_samples=711),
     ]
 
     _test_measurements_and_summaries_correct(paths, config, expected_summaries)
@@ -52,21 +52,22 @@ def test_dont_join_chunks_if_time_gap_is_too_large():
     config = MeasurementsConfig(
         valve_column="solenoid_valves",
         extra_columns=EXTRA_COLUMNS,
-        max_gap=pd.Timedelta(1, "s"),
+        max_gap=pd.Timedelta(3, "s"),
     )
     # These were established by manually sifting through the files
     expected_summaries = [
         dict(valve_number=13, n_samples=217),
         dict(valve_number=14, n_samples=1789),
         dict(valve_number=15, n_samples=1787),
-        dict(valve_number=1, n_samples=680),
-        dict(valve_number=1, n_samples=1099),
+        dict(valve_number=1, n_samples=680),  # this is a non-connection of two files
+        dict(valve_number=1, n_samples=1096),
         dict(valve_number=2, n_samples=1782),
-        dict(valve_number=3, n_samples=1600),
+        dict(valve_number=3, n_samples=1596),  # this is a non-connection of two files
         dict(valve_number=3, n_samples=189),
         dict(valve_number=4, n_samples=1786),
         dict(valve_number=5, n_samples=1783),
-        dict(valve_number=6, n_samples=716),
+        dict(valve_number=6, n_samples=672),  # this is a cut inside a file
+        dict(valve_number=6, n_samples=39),
     ]
 
     _test_measurements_and_summaries_correct(paths, config, expected_summaries)

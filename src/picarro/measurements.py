@@ -8,6 +8,7 @@ import string
 from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
 import pandas as pd
 from picarro.chunks import (
+    DEFAULT_MAX_GAP,
     Chunk,
     ChunkMeta,
     ParsingConfig,
@@ -74,7 +75,7 @@ def _validate_label(s: str):
 
 @dataclass
 class StitchingConfig:
-    max_gap: pd.Timedelta = pd.Timedelta(10, "s")
+    max_gap: pd.Timedelta = DEFAULT_MAX_GAP
     min_duration: Optional[pd.Timedelta] = None
     max_duration: Optional[pd.Timedelta] = None
     valve_labels: Optional[Dict[int, str]] = None
@@ -144,8 +145,9 @@ def _stitch_chunk_metas(
                 if same_valve:
                     logger.debug(
                         f"Not connecting chunks with a gap of {time_gap} "
-                        f"starting at {prev_chunk.end}.")
-                chunk_metas.insert(0, candidate) # put the candidate back in the list
+                        f"starting at {prev_chunk.end}."
+                    )
+                chunk_metas.insert(0, candidate)  # put the candidate back in the list
                 break
 
         yield MeasurementMeta.from_chunk_metas(collected, config.valve_labels)

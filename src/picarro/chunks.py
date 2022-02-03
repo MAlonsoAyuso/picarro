@@ -43,9 +43,13 @@ class InvalidRowHandling(Enum):
     error = "error"
 
 
+DEFAULT_MAX_GAP = pd.Timedelta(10, "s")
+
+
 @dataclass
 class ParsingConfig:
     valve_column: str
+    max_gap: pd.Timedelta = DEFAULT_MAX_GAP
     extra_columns: List[str] = field(default_factory=list)
     null_rows: InvalidRowHandling = InvalidRowHandling.skip
     epoch_time_column: str = "EPOCH_TIME"
@@ -160,8 +164,9 @@ def _split_file(src_path: Path, config: ParsingConfig) -> Iterator[Chunk]:
     d = read_file(src_path, config)
     d = d.pipe(_drop_data_between_valves, config=config)
     valve_just_changed = d[config.valve_column].diff() != 0
-    valve_change_count = valve_just_changed.cumsum()
-    for i, chunk in d.groupby(valve_change_count):  # type: ignore
+    too_long_gap = d.index.to_series().diff() > config.max_gap
+    chunk_change_count = (valve_just_changed | too_long_gap).cumsum()
+    for _, chunk in d.groupby(chunk_change_count):
         yield chunk
 
 

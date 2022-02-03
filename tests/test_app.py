@@ -87,9 +87,9 @@ def test_integrated(app_config: AppConfig, tmp_path: Path):
         # one removed here compared to the full set, because it's too short
         dict(valve_number=14, n_samples=1789),
         dict(valve_number=15, n_samples=1787),
-        dict(valve_number=1, n_samples=1779),
+        dict(valve_number=1, n_samples=1776),
         dict(valve_number=2, n_samples=1782),
-        dict(valve_number=3, n_samples=1789),
+        dict(valve_number=3, n_samples=1785),
         dict(valve_number=4, n_samples=1786),
         dict(valve_number=5, n_samples=1783),
         # one removed here compared to the full set, because it's too short

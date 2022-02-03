@@ -5,8 +5,6 @@
 - Write docs
 - Decide on a license and update package metadata
 - Make parser crash with a nicer message about which file went wrong
-- Minor things
-  - Check for gaps within files too; cut chunks already when reading file?
 - Make overview figure of all files?
 - Allow filtering of data based on
   - Alarm
