@@ -94,5 +94,8 @@ class AppConfig:
     def from_toml(cls, path: Path):
         with open(path, "r") as f:
             data = toml.load(f)
+            data["measurements"]["valve_labels"] = {
+                int(k): v for k, v in data["measurements"]["valve_labels"].items()
+            }
         config = _toml_converter.structure(data, cls)
         return config
