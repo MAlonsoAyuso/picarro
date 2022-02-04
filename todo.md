@@ -13,6 +13,7 @@
   - ...
   - maybe more generally, possibility to make a list of columns and allowed min/max values or list of allowed values; could be applied on the row level
 - Add goodness-of-fit measure to flux estimates info
+- Use pydantic or something to validate configuration file input
 
 ## Maybe later
 
