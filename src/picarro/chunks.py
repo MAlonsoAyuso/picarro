@@ -4,11 +4,14 @@ from enum import Enum
 from os import PathLike
 from pathlib import Path
 from typing import (
+    Any,
+    Dict,
     Hashable,
     Iterator,
     List,
     Mapping,
     NewType,
+    Optional,
     Sequence,
     Union,
 )
@@ -47,12 +50,21 @@ DEFAULT_MAX_GAP = pd.Timedelta(10, "s")
 
 
 @dataclass
+class FilterConfig:
+    allowed: Optional[List[Any]] = None
+    disallowed: List[Any] = field(default_factory=list)
+    min: Optional[Any] = None
+    max: Optional[Any] = None
+
+
+@dataclass
 class ParsingConfig:
     valve_column: str
     max_gap: pd.Timedelta = DEFAULT_MAX_GAP
     extra_columns: List[str] = field(default_factory=list)
     null_rows: InvalidRowHandling = InvalidRowHandling.skip
     epoch_time_column: str = "EPOCH_TIME"
+    filters: Dict[str, FilterConfig] = field(default_factory=dict)
 
 
 INDEX_NAME = "datetime_utc"
@@ -98,7 +110,12 @@ def read_file(path: Union[PathLike, str], config: ParsingConfig) -> ParsedFile:
 
 def _get_columns_to_read(config: ParsingConfig) -> List[str]:
     return _deduplicate_sequence(
-        [config.epoch_time_column, config.valve_column, *config.extra_columns]
+        [
+            config.epoch_time_column,
+            config.valve_column,
+            *config.extra_columns,
+            *config.filters.keys(),
+        ]
     )
 
 
@@ -108,6 +125,9 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig, path: Path) -> pd.Da
 
     # Reindex as time stamp
     d = _reindex_timestamp(d, config)
+
+    # Apply filters
+    d = _apply_filters(d, config)
 
     # Nulls
     row_has_null = d.isnull().any(axis=1)
@@ -129,6 +149,30 @@ def _clean_raw_data(d: pd.DataFrame, config: ParsingConfig, path: Path) -> pd.Da
             d = d.loc[~row_has_null]
 
     return d
+
+
+def _apply_filters(d: pd.DataFrame, config: ParsingConfig) -> pd.DataFrame:
+    for column, filter_config in config.filters.items():
+        n_before = len(d)
+        idx = _get_filtered_index(d[column], filter_config)
+        d = d.loc[idx]
+        n_removed = n_before - len(d)
+        logger.debug(
+            f"Filter for {column!r} removed {n_removed}/{n_before}."
+        )
+    return d
+
+
+def _get_filtered_index(s: pd.Series, filter_config: FilterConfig) -> pd.Index:
+    if filter_config.allowed is not None:
+        s = s[s.isin(filter_config.allowed)]
+    if filter_config.disallowed:
+        s = s[~s.isin(filter_config.disallowed)]
+    if filter_config.min:
+        s = s[s >= filter_config.min]
+    if filter_config.max:
+        s = s[s <= filter_config.max]
+    return s.index
 
 
 def _deduplicate_sequence(l: Sequence[Hashable]) -> List[Hashable]:
