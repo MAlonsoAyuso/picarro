@@ -1,12 +1,12 @@
 from __future__ import annotations
 from typing import List, Mapping, Type, Union
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import datetime
 import pandas as pd
 import numpy as np
 import scipy.stats
-from picarro.measurements import MeasurementMeta
 import logging
+import cattr.preconf.json
 
 logger = logging.getLogger(__name__)
 
@@ -14,14 +14,14 @@ VolumetricFlux = float
 
 
 @dataclass
-class FluxEstimationConfig:
-    method: str
-    columns: List[str]
-    t0_delay: pd.Timedelta
-    t0_margin: pd.Timedelta
+class FluxesConfig:
+    t0_delay: datetime.timedelta
+    t0_margin: datetime.timedelta
     A: float
     V: float
     Q: float
+    columns: List[str] = field(default_factory=list)
+    method: str = "exponential"
 
     @property
     def tau(self) -> float:
@@ -30,6 +30,10 @@ class FluxEstimationConfig:
     @property
     def h(self) -> float:
         return self.V / self.A
+
+    def __post_init__(self):
+        if self.method not in ESTIMATORS:
+            raise ValueError(f"{self.method!r} is not a flux estimation method.")
 
 
 @dataclass
@@ -51,15 +55,18 @@ class Moments:
 
 @dataclass
 class _FluxEstimatorBase:
-    config: FluxEstimationConfig
+    config: FluxesConfig
     column: str
     fit_params: LinearFit
     moments: Moments
     n_samples: int
 
+    def unstructure(self) -> dict:
+        return json_converter.unstructure(self)
+
     @staticmethod
     def transform_time(
-        times: pd.DatetimeIndex, config: FluxEstimationConfig, moments: Moments
+        times: pd.DatetimeIndex, config: FluxesConfig, moments: Moments
     ) -> np.ndarray:
         raise NotImplementedError()
 
@@ -80,7 +87,7 @@ class _FluxEstimatorBase:
         return elapsed
 
     @classmethod
-    def create(cls, data: pd.Series, config: FluxEstimationConfig):
+    def create(cls, data: pd.Series, config: FluxesConfig):
         column = data.name
         assert isinstance(column, str)
         fit_params, moments, n_samples = cls._fit(data, config)
@@ -89,7 +96,7 @@ class _FluxEstimatorBase:
 
     @classmethod
     def _fit(
-        cls, data: pd.Series, config: FluxEstimationConfig
+        cls, data: pd.Series, config: FluxesConfig
     ) -> tuple[LinearFit, Moments, int]:
         moments = cls._determine_moments(data, config)
         data_to_fit = data[moments.fit_start : moments.fit_end]
@@ -107,7 +114,7 @@ class _FluxEstimatorBase:
         return fit_params, moments, len(data_to_fit)
 
     @staticmethod
-    def _determine_moments(data: pd.Series, config: FluxEstimationConfig) -> Moments:
+    def _determine_moments(data: pd.Series, config: FluxesConfig) -> Moments:
         assert isinstance(data.index, pd.DatetimeIndex)
         if len(data) == 0:
             raise ValueError(f"Empty dataset {data}")
@@ -134,7 +141,7 @@ class _FluxEstimatorBase:
 class LinearEstimator(_FluxEstimatorBase):
     @staticmethod
     def transform_time(
-        times: pd.DatetimeIndex, config: FluxEstimationConfig, moments: Moments
+        times: pd.DatetimeIndex, config: FluxesConfig, moments: Moments
     ) -> np.ndarray:
         # Since estimation is linear, it does not matter what start point we have.
         # Referencing here from t0 for easier debugging: now we know
@@ -162,7 +169,7 @@ class LinearEstimator(_FluxEstimatorBase):
 class ExponentialEstimator(_FluxEstimatorBase):
     @staticmethod
     def transform_time(
-        times: pd.DatetimeIndex, config: FluxEstimationConfig, moments: Moments
+        times: pd.DatetimeIndex, config: FluxesConfig, moments: Moments
     ) -> np.ndarray:
         # Since estimation is linear, it does not matter what unit we have for time.
         # Referencing here from times[0] for easier debugging: now we know
@@ -194,13 +201,13 @@ ESTIMATORS: Mapping[str, Type[FluxEstimator]] = {
 }
 
 
-@dataclass
-class FluxResult:
-    measurement_meta: MeasurementMeta
-    estimator: FluxEstimator
+# @dataclass
+# class FluxResult:
+#     segment_info: SegmentInfo
+#     estimator: FluxEstimator
 
 
-def estimate_flux(config: FluxEstimationConfig, data: pd.Series) -> FluxEstimator:
+def estimate_flux(config: FluxesConfig, data: pd.Series) -> FluxEstimator:
     cls = ESTIMATORS[config.method]
     return cls.create(data, config)
 
@@ -222,3 +229,20 @@ def build_fluxes_dataframe(flux_results: List[FluxResult]) -> pd.DataFrame:
 
     rows = list(map(make_row, flux_results))
     return pd.DataFrame(rows)
+
+
+json_converter = cattr.preconf.json.make_converter()
+json_converter.register_unstructure_hook(datetime.datetime, datetime.datetime.isoformat)
+json_converter.register_unstructure_hook(
+    datetime.timedelta, datetime.timedelta.total_seconds
+)
+json_converter.register_structure_hook(
+    datetime.datetime, lambda v, _: datetime.datetime.fromisoformat(v)
+)
+json_converter.register_structure_hook(
+    datetime.timedelta, lambda v, _: datetime.timedelta(seconds=v)
+)
+json_converter.register_structure_hook(
+    FluxEstimator,
+    lambda obj, _: json_converter.structure(obj, ESTIMATORS[obj["config"]["method"]]),
+)

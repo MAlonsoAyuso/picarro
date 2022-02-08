@@ -1,11 +1,9 @@
 import importlib.resources as resources
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Optional, Sequence
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from picarro.fluxes import ESTIMATORS
-from picarro.fluxes import FluxResult
-from picarro.measurements import Measurement, MeasurementMeta
+from picarro.fluxes import ESTIMATORS, FluxEstimator
 import pandas as pd
 
 # Matplotlib TkAgg backend hogs memory and crashes with too many figures:
@@ -28,11 +26,11 @@ def _subplot_title(column):
     return column
 
 
-def plot_measurement(
-    measurement_meta: MeasurementMeta,
-    measurement: Measurement,
+def plot_segment(
+    segment: pd.DataFrame,
     columns: Sequence[str],
-    flux_results: Iterable[FluxResult] = (),
+    flux_estimates: Iterable[FluxEstimator] = (),
+    valve_labels: Optional[Mapping[int, str]] = None,
 ) -> Figure:
     # Rough calculation of height depending on number of panels;
     # nothing scientific at all and probably will break down for large numbers.
@@ -51,11 +49,16 @@ def plot_measurement(
         figsize=(6.4, height_total),
     )
 
-    fig.suptitle(
-        f"{measurement_meta.valve_label} (valve #{measurement_meta.valve_number})"
+    (valve_number,) = segment["valve_number"].unique()
+    valve_label = (
+        valve_labels.get(valve_number, "[missing label]")
+        if valve_labels
+        else str(valve_number)
     )
 
-    measurement_start = measurement.index[0]
+    fig.suptitle(f"{valve_label} (valve #{valve_number})")
+
+    segment_start = segment.index[0]
 
     if len(columns) > 1:
         ax_by_column = dict(zip(columns, axs))  # type: ignore
@@ -63,41 +66,41 @@ def plot_measurement(
         ax_by_column = {columns[0]: axs}
 
     def calculate_elapsed(time):
-        return (time - measurement_start).total_seconds() / _SECONDS_PER_MINUTE
+        return (time - segment_start).total_seconds() / _SECONDS_PER_MINUTE
 
     for col in columns:
         ax = ax_by_column[col]
         ax.set_title(_subplot_title(col))
         ax.plot(
-            calculate_elapsed(measurement.index),
-            measurement[col],
+            calculate_elapsed(segment.index),
+            segment[col],
             **_MEASUREMENT_KWS,
         )
 
-    for flux_result in flux_results:
-        if flux_result.measurement_meta != measurement_meta:
+    for flux_estimate in flux_estimates:
+        if flux_estimate.moments.data_start != segment_start:
             continue
 
-        moments = flux_result.estimator.moments
-        estimator_times = measurement.loc[moments.fit_start : moments.fit_end].index
+        moments = flux_estimate.moments
+        estimator_times = segment.loc[moments.fit_start : moments.fit_end].index
         assert isinstance(estimator_times, pd.DatetimeIndex)
-        estimated_values = flux_result.estimator.predict(estimator_times)
-        ax = ax_by_column[flux_result.estimator.column]
+        estimated_values = flux_estimate.predict(estimator_times)
+        ax = ax_by_column[flux_estimate.column]
 
         # Draw fitted function
         ax.plot(
             calculate_elapsed(estimator_times),
             estimated_values,
             lw=2,
-            color=_ESTIMATOR_COLORS[flux_result.estimator.config.method],
-            label=f"{flux_result.estimator.config.method} fit",
+            color=_ESTIMATOR_COLORS[flux_estimate.config.method],
+            label=f"{flux_estimate.config.method} fit",
         )
 
         # Draw vertical line at t0
         ax.axvline(
-            [calculate_elapsed(flux_result.estimator.moments.t0)],
+            [calculate_elapsed(flux_estimate.moments.t0)],
             lw=1,
-            color=_ESTIMATOR_COLORS[flux_result.estimator.config.method],
+            color=_ESTIMATOR_COLORS[flux_estimate.config.method],
             linestyle="--",
             label="t0",
         )
@@ -107,7 +110,7 @@ def plot_measurement(
 
     last_ax = ax_by_column[columns[-1]]
     last_ax.set_xlabel(
-        f"Time elapsed (minutes) since\n{measurement_start:%Y-%m-%d %H:%M:%S}"
+        f"Time elapsed (minutes) since\n{segment_start:%Y-%m-%d %H:%M:%S}"
     )
 
     return fig

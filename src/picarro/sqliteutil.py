@@ -60,6 +60,8 @@ def insert_dataframe(
 _SQLITE_TYPES_BY_NUMPY_KIND = {
     "i": "int",
     "f": "real",
+    "M": "datetime",
+    # "M": "int",
 }
 
 
