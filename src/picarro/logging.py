@@ -1,5 +1,8 @@
 # https://docs.python.org/3/library/logging.config.html#configuration-dictionary-schema
-from typing import Any, Dict
+import logging.config
+import os
+from pathlib import Path
+from typing import Any, Dict, Optional
 
 
 LogSettingsDict = Dict[str, Any]
@@ -43,3 +46,13 @@ DEFAULT_LOG_SETTINGS = {
     "version": 1,
     "disable_existing_loggers": False,
 }
+
+
+def setup_logging(settings: LogSettingsDict, logging_dir: Optional[Path] = None):
+    if logging_dir is None:
+        logging_dir = Path.cwd()
+    cwd = Path.cwd()
+    logging_dir.mkdir(parents=True, exist_ok=True)
+    os.chdir(logging_dir)
+    logging.config.dictConfig(settings)
+    os.chdir(cwd)

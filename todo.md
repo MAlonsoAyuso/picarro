@@ -20,3 +20,21 @@
 - Be more permissive about versions of dependencies (currently requiring latest version of pandas, matplotlib, scipy, click, ...)
 - Allow different output formats (csv, hdf, ...)
 - Allow multiple fit methods?
+
+# Structure for a new program using an Sqlite database instead
+
+ensure that data files are non-overlapping
+
+read picarro files
+- parse timestamps
+- exclude unwanted cols based on name
+- drop rows with noninteger valve number
+
+put into an SQLite database
+
+filter based on column values
+- exclude unwanted rows, e.g., with alarm etc
+
+determine segments based on filtered data
+
+analyze segments
