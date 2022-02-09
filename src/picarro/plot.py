@@ -1,10 +1,12 @@
 import importlib.resources as resources
 from typing import Iterable, Mapping, Optional, Sequence
-from matplotlib.figure import Figure
-import matplotlib.pyplot as plt
+
 import matplotlib as mpl
-from picarro.fluxes import ESTIMATORS, FluxEstimator
+import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.figure import Figure
+
+from picarro.fluxes import ESTIMATORS, FluxEstimator
 
 # Matplotlib TkAgg backend hogs memory and crashes with too many figures:
 # https://github.com/matplotlib/matplotlib/issues/21950

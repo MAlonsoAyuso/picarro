@@ -1,10 +1,11 @@
-import pandas as pd
-from picarro.chunks import read_file
-from picarro.fluxes import FluxEstimationConfig, estimate_flux
 import pathlib
-import numpy as np
 
+import numpy as np
+import pandas as pd
+
+from picarro.chunks import read_file
 from picarro.config import MeasurementsConfig
+from picarro.fluxes import FluxesConfig, estimate_flux
 
 _DATA_DIR = pathlib.Path(__file__).parent.parent / "example_data"
 
@@ -26,12 +27,12 @@ common_params = dict(
     columns=[],  # does not matter here
 )
 
-linear_config = FluxEstimationConfig(
+linear_config = FluxesConfig(
     method="linear",
     **common_params,  # type: ignore
 )
 
-exponential_config = FluxEstimationConfig(
+exponential_config = FluxesConfig(
     method="exponential",
     **common_params,  # type: ignore
 )

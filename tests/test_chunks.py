@@ -1,14 +1,12 @@
 from __future__ import annotations
-import pytest
-from picarro.config import MeasurementsConfig
-from picarro.chunks import (
-    ChunkMeta,
-    read_chunks,
-    read_file,
-)
-from pathlib import Path
-import pandas as pd
 
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from picarro.chunks import ChunkMeta, read_chunks, read_file
+from picarro.config import MeasurementsConfig
 from picarro.core import DataProcessingProblem
 
 _DATA_DIR = Path(__file__).parent.parent / "example_data"

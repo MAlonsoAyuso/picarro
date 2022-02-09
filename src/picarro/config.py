@@ -1,18 +1,16 @@
 from __future__ import annotations
+
+import logging
+import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
-import re
-from typing import (
-    Dict,
-    Optional,
-    Union,
-    List,
-)
-import toml
+from typing import Dict, List, Optional, Union
+
 import cattr.preconf.tomlkit
 import pandas as pd
-import logging
+import toml
+
 from picarro.core import ConfigProblem
 from picarro.fluxes import FluxEstimationConfig
 from picarro.logging import DEFAULT_LOG_SETTINGS, LogSettingsDict

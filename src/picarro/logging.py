@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-
 LogSettingsDict = Dict[str, Any]
 
 DEFAULT_LOG_SETTINGS = {

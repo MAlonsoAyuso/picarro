@@ -1,21 +1,17 @@
-import os
-from pathlib import Path
-import shutil
 import itertools
+import os
+import shutil
+from pathlib import Path
 from typing import Callable
-import pytest
-import picarro.app
-from picarro.config import (
-    AppConfig,
-    FluxEstimationConfig,
-    MeasurementsConfig,
-    OutItem,
-)
-from picarro.measurements import MeasurementMeta
-import picarro.measurements
+
 import numpy as np
 import pandas as pd
+import pytest
 
+import picarro.app
+import picarro.measurements
+from picarro.config import AppConfig, FluxesConfig, MeasurementsConfig, OutItem
+from picarro.measurements import MeasurementMeta
 
 config_example_src = Path(__file__).absolute().parent / "config_example.toml"
 assert config_example_src.exists()
@@ -45,7 +41,7 @@ def test_create_config(app_config: AppConfig, tmp_path: Path):
             min_duration=pd.Timedelta(1080, "s"),
             max_duration=None,
         ),
-        flux_estimation=FluxEstimationConfig(
+        flux_estimation=FluxesConfig(
             columns=["N2O", "CH4"],
             method="linear",
             t0_delay=pd.Timedelta(480, "s"),

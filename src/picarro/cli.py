@@ -1,26 +1,27 @@
 from __future__ import annotations
-from copy import deepcopy
+
 import datetime
-from enum import Enum, auto
 import functools
+import glob
+import logging
 import os
-from pathlib import Path
 import shutil
 import sqlite3
-from typing import Callable, Dict, Iterable, List, Optional, Union
+from copy import deepcopy
+from enum import Enum, auto
+from pathlib import Path
+from typing import Callable, Dict, Iterable, List, Union
+
 import click
-import logging
-import glob
 import matplotlib.pyplot as plt
 import numpy as np
-import toml
-import picarro.fluxes
-import picarro.plot
-
-# import picarro.config
-import picarro.logging
-import picarro.database
 import pydantic
+import toml
+
+import picarro.database
+import picarro.fluxes
+import picarro.logging
+import picarro.plot
 
 logger = logging.getLogger(__name__)
 

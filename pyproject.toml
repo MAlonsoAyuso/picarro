@@ -19,3 +19,6 @@ reportUnknownParameterType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
 reportUnknownLambdaType = false
+
+[tool.isort]
+profile = "black"

@@ -1,21 +1,23 @@
 from __future__ import annotations
+
 import dataclasses
-from dataclasses import dataclass
 import datetime
-from itertools import zip_longest
-import json
-from pathlib import Path
-import sqlite3
-from typing import Iterable, Iterator, Optional, Tuple, Union
-import pandas as pd
-import numpy as np
 import importlib.resources
+import json
+import logging
+import sqlite3
+from dataclasses import dataclass
+from itertools import zip_longest
+from pathlib import Path
+from typing import Iterable, Iterator, Optional, Tuple, Union
+
+import numpy as np
+import pandas as pd
+
 import picarro.fluxes
 import picarro.resources
 import picarro.sqliteutil
 from picarro.core import DataProcessingProblem
-import logging
-
 from picarro.util import check_item_types
 
 logger = logging.getLogger(__name__)

@@ -1,16 +1,15 @@
 from __future__ import annotations
-import itertools
 
+import itertools
+from pathlib import Path
+
+import pandas as pd
 import pytest
+
+from picarro.chunks import read_chunks
 from picarro.config import MeasurementsConfig
 from picarro.core import ConfigProblem
-from picarro.measurements import (
-    build_measurement_metas,
-    read_measurements,
-)
-from picarro.chunks import read_chunks
-from pathlib import Path
-import pandas as pd
+from picarro.measurements import build_measurement_metas, read_measurements
 
 _DATA_DIR = Path(__file__).parent.parent / "example_data"
 

@@ -1,12 +1,14 @@
 from __future__ import annotations
-from typing import List, Mapping, Type, Union
-from dataclasses import dataclass, field
+
 import datetime
-import pandas as pd
-import numpy as np
-import scipy.stats
 import logging
+from dataclasses import dataclass, field
+from typing import List, Mapping, Type, Union
+
 import cattr.preconf.json
+import numpy as np
+import pandas as pd
+import scipy.stats
 
 logger = logging.getLogger(__name__)
 

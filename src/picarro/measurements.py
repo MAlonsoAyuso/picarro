@@ -1,21 +1,17 @@
 from __future__ import annotations
-from dataclasses import dataclass
+
 import datetime
 import glob
 import itertools
-from pathlib import Path
-import string
-from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
-import pandas as pd
-from picarro.chunks import (
-    DEFAULT_MAX_GAP,
-    Chunk,
-    ChunkMeta,
-    ParsingConfig,
-    read_chunks,
-)
 import logging
+import string
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Iterable, Iterator, List, NewType, Optional, Tuple, Union
 
+import pandas as pd
+
+from picarro.chunks import DEFAULT_MAX_GAP, Chunk, ChunkMeta, ParsingConfig, read_chunks
 from picarro.core import ConfigProblem, DataProcessingProblem
 
 logger = logging.getLogger(__name__)
