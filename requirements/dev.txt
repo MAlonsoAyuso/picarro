@@ -8,7 +8,7 @@ atomicwrites==1.4.0
     # via pytest
 attrs==21.2.0
     # via pytest
-backports.entry-points-selectable==1.1.1
+backports-entry-points-selectable==1.1.1
     # via virtualenv
 black==21.12b0
     # via -r .\requirements\dev.in
@@ -44,7 +44,7 @@ idna==3.3
     # via requests
 importlib-metadata==4.8.2
     # via
-    #   backports.entry-points-selectable
+    #   backports-entry-points-selectable
     #   build
     #   click
     #   keyring
