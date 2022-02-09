@@ -48,12 +48,18 @@ To add a dev or testing requirement, add the requirement to the `.in` file and t
 pip-compile requirements/{dev|test|whatever}.in
 ```
 
-# Format code using `black`
+# Code formatting
 
-Because `black` is the new black ;)
+- Use `black` to format code <https://black.readthedocs.io/en/stable/>
+- Use `isort` to sort imports <https://github.com/PyCQA/isort>
 
-<https://black.readthedocs.io/en/stable/>
+## Use pre-commit hooks to automate it
 
+Optional but strongly recommended: Use `pre-commit` <https://pre-commit.com/> to run `isort` and `black`. It is already prepared, so just do
+```
+pre-config install
+```
+to install the pre-commit hooks.
 
 # Build
 
