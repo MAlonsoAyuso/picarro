@@ -25,10 +25,19 @@ DEFAULT_LOG_SETTINGS = {
             "formatter": "brief",
             "filters": ["allow_picarro"],
         },
-        "file": {
+        "file_debug": {
             "class": "logging.handlers.RotatingFileHandler",
             "level": "DEBUG",
-            "filename": "log.txt",
+            "filename": "log.debug.txt",
+            "formatter": "detailed",
+            "maxBytes": 1e6,
+            "backupCount": 5,
+            "filters": ["allow_picarro"],
+        },
+        "file_info": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "level": "INFO",
+            "filename": "log.info.txt",
             "formatter": "detailed",
             "maxBytes": 1e6,
             "backupCount": 5,
@@ -39,7 +48,8 @@ DEFAULT_LOG_SETTINGS = {
         "level": "INFO",
         "handlers": [
             "console",
-            "file",
+            "file_debug",
+            "file_info",
         ],
     },
     "version": 1,

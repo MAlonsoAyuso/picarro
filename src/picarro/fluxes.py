@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import datetime
 import logging
-from dataclasses import dataclass, field
-from typing import List, Mapping, Type, Union
+from dataclasses import dataclass
 
-import cattr.preconf.json
 import numpy as np
 import pandas as pd
 import scipy.stats
+
+from picarro.util import format_duration
 
 logger = logging.getLogger(__name__)
 
@@ -16,26 +16,11 @@ VolumetricFlux = float
 
 
 @dataclass
-class FluxesConfig:
-    t0_delay: datetime.timedelta
-    t0_margin: datetime.timedelta
-    A: float
-    V: float
-    Q: float
-    columns: List[str] = field(default_factory=list)
-    method: str = "exponential"
-
-    @property
-    def tau(self) -> float:
-        return self.V / self.Q
-
-    @property
-    def h(self) -> float:
-        return self.V / self.A
-
-    def __post_init__(self):
-        if self.method not in ESTIMATORS:
-            raise ValueError(f"{self.method!r} is not a flux estimation method.")
+class EstimationParams:
+    t0_delay: datetime.timedelta  # the nominal delay from valve switch to gas arrival
+    t0_margin: datetime.timedelta  # an additional delay to add before starting fit
+    tau: datetime.timedelta  # time constant (= V / Q)
+    h: float  # equivalent height of chamber (= V / A)
 
 
 @dataclass
@@ -47,6 +32,59 @@ class LinearFit:
 
 
 @dataclass
+class ExponentialEstimator:
+    gas: str
+    moments: Moments
+    params: EstimationParams
+    linear_fit: LinearFit
+
+    @classmethod
+    def fit(cls, data: pd.Series, params: EstimationParams) -> ExponentialEstimator:
+        if not isinstance(data.name, str):
+            raise ValueError(f"Expected string name on series but found {data.name}.")
+
+        moments = Moments.from_data(data, params)
+
+        data_to_fit = data[moments.fit_start : moments.fit_end]
+        assert isinstance(data_to_fit.index, pd.DatetimeIndex)
+        assert len(data_to_fit), (data, moments)
+
+        x = cls.transform_time(data_to_fit.index, moments.t0, params.tau)
+        y = data_to_fit.to_numpy()  # type: ignore
+        scipy_fit_result = scipy.stats.linregress(x, y)
+        linear_fit = LinearFit(
+            intercept=scipy_fit_result.intercept,  # type: ignore
+            slope=scipy_fit_result.slope,  # type: ignore
+            intercept_stderr=scipy_fit_result.intercept_stderr,  # type: ignore
+            slope_stderr=scipy_fit_result.stderr,  # type: ignore
+        )
+
+        return cls(
+            data.name,
+            moments,
+            params,
+            linear_fit,
+        )
+
+    @staticmethod
+    def transform_time(
+        times: pd.DatetimeIndex, t0: datetime.datetime, tau: datetime.timedelta
+    ) -> np.ndarray:
+        return 1 - np.exp(-calculate_elapsed_seconds(times, t0) / tau.total_seconds())
+
+    def estimate_vol_flux(self) -> VolumetricFlux:
+        vol_flux = (
+            self.params.h / self.params.tau.total_seconds() * self.linear_fit.slope
+        )
+        return float(vol_flux)
+
+    def predict_concentration(self, times: pd.DatetimeIndex) -> pd.Series:
+        x = self.transform_time(times, self.moments.t0, self.params.tau)
+        y = self.linear_fit.intercept + self.linear_fit.slope * x
+        return pd.Series(data=y, index=times)
+
+
+@dataclass
 class Moments:
     data_start: datetime.datetime
     t0: datetime.datetime
@@ -54,77 +92,26 @@ class Moments:
     fit_end: datetime.datetime
     data_end: datetime.datetime
 
-
-@dataclass
-class _FluxEstimatorBase:
-    config: FluxesConfig
-    column: str
-    fit_params: LinearFit
-    moments: Moments
-    n_samples: int
-
-    def unstructure(self) -> dict:
-        return json_converter.unstructure(self)
-
     @staticmethod
-    def transform_time(
-        times: pd.DatetimeIndex, config: FluxesConfig, moments: Moments
-    ) -> np.ndarray:
-        raise NotImplementedError()
-
-    def estimate_vol_flux(self) -> VolumetricFlux:
-        raise NotImplementedError()
-
-    def predict(self, times: pd.DatetimeIndex) -> pd.Series:
-        x = self.transform_time(times, self.config, self.moments)
-        y = self.fit_params.intercept + self.fit_params.slope * x
-        return pd.Series(data=y, index=times)
-
-    @staticmethod
-    def _calculate_elapsed(
-        times: pd.DatetimeIndex, t0: datetime.datetime
-    ) -> pd.TimedeltaIndex:
-        elapsed = times - t0
-        assert isinstance(elapsed, pd.TimedeltaIndex)
-        return elapsed
-
-    @classmethod
-    def create(cls, data: pd.Series, config: FluxesConfig):
-        column = data.name
-        assert isinstance(column, str)
-        fit_params, moments, n_samples = cls._fit(data, config)
-        assert isinstance(data.index, pd.DatetimeIndex)
-        return cls(config, column, fit_params, moments, n_samples)
-
-    @classmethod
-    def _fit(
-        cls, data: pd.Series, config: FluxesConfig
-    ) -> tuple[LinearFit, Moments, int]:
-        moments = cls._determine_moments(data, config)
-        data_to_fit = data[moments.fit_start : moments.fit_end]
-        assert isinstance(data_to_fit.index, pd.DatetimeIndex)
-        assert len(data_to_fit), (data, moments)
-        x = cls.transform_time(data_to_fit.index, config, moments)
-        y = data_to_fit.to_numpy()  # type: ignore
-        result = scipy.stats.linregress(x, y)
-        fit_params = LinearFit(
-            intercept=result.intercept,  # type: ignore
-            slope=result.slope,  # type: ignore
-            intercept_stderr=result.intercept_stderr,  # type: ignore
-            slope_stderr=result.stderr,  # type: ignore
-        )
-        return fit_params, moments, len(data_to_fit)
-
-    @staticmethod
-    def _determine_moments(data: pd.Series, config: FluxesConfig) -> Moments:
+    def from_data(data: pd.Series, params: EstimationParams) -> Moments:
         assert isinstance(data.index, pd.DatetimeIndex)
         if len(data) == 0:
             raise ValueError(f"Empty dataset {data}")
         data_start = data.index[0]
         data_end = data.index[-1]
-        t0 = data_start + config.t0_delay
-        fit_start_limit = t0 + config.t0_margin
+        t0 = data_start + params.t0_delay
+        fit_start_limit = t0 + params.t0_margin
         fit_end_limit = data_end
+
+        if fit_start_limit > data_end:
+            data_duration = data_end - data_start
+            raise ValueError(
+                f"Check settings. "
+                f"Measurement starting at {data_start} "
+                f"has duration {format_duration(data_duration)} "
+                f"and is therefore too short to start the fit after "
+                f"{format_duration(params.t0_delay + params.t0_margin)}."
+            )
 
         fit_index = data.index[
             (data.index >= fit_start_limit) & (data.index <= fit_end_limit)
@@ -139,112 +126,7 @@ class _FluxEstimatorBase:
         return Moments(data_start, t0, fit_start, fit_end, data_end)
 
 
-@dataclass
-class LinearEstimator(_FluxEstimatorBase):
-    @staticmethod
-    def transform_time(
-        times: pd.DatetimeIndex, config: FluxesConfig, moments: Moments
-    ) -> np.ndarray:
-        # Since estimation is linear, it does not matter what start point we have.
-        # Referencing here from t0 for easier debugging: now we know
-        # that the regression x variable represents elapsed seconds since t0.
-        return calculate_elapsed_seconds(times, moments.t0)
-
-    def estimate_vol_flux(self) -> VolumetricFlux:
-        # In principle we want to estimate the derivative of the exponential curve
-        # at a given time in relation to t0.
-        # But in practice the fit here is a linear fit to a part of the curve.
-        # Here I'm assuming that the slope of the linear fit is approximately
-        # equal to the derivative at the midpoint of the exponential fit.
-        fit_duration = self.moments.fit_end - self.moments.fit_start
-        fit_midpoint = self.moments.fit_start + fit_duration / 2
-        seconds_elapsed = (fit_midpoint - self.moments.t0).total_seconds()
-        vol_flux = (
-            self.config.h
-            * np.exp(seconds_elapsed / self.config.tau)
-            * self.fit_params.slope
-        )
-        return vol_flux
-
-
-@dataclass
-class ExponentialEstimator(_FluxEstimatorBase):
-    @staticmethod
-    def transform_time(
-        times: pd.DatetimeIndex, config: FluxesConfig, moments: Moments
-    ) -> np.ndarray:
-        # Since estimation is linear, it does not matter what unit we have for time.
-        # Referencing here from times[0] for easier debugging: now we know
-        # that the regression x variable represents elapsed seconds of the measurement.
-        elapsed_seconds = (times - moments.t0).total_seconds()  # type: ignore
-        return 1 - np.exp(-elapsed_seconds / config.tau)
-
-    def estimate_vol_flux(self) -> VolumetricFlux:
-        # In principle we want to estimate the derivative of the exponential curve
-        # at a given time in relation to t0.
-        # But in practice the fit here is a linear fit to a part of the curve.
-        # Here I'm assuming that the slope of the linear fit is approximately
-        # equal to the derivative at the midpoint of the exponential fit.
-        vol_flux = self.config.h / self.config.tau * self.fit_params.slope
-        return float(vol_flux)
-
-
 def calculate_elapsed_seconds(
     times: pd.DatetimeIndex, ref_time: datetime.datetime
 ) -> np.ndarray:
     return (times - ref_time).total_seconds()  # type: ignore
-
-
-FluxEstimator = Union[LinearEstimator, ExponentialEstimator]
-
-ESTIMATORS: Mapping[str, Type[FluxEstimator]] = {
-    "linear": LinearEstimator,
-    "exponential": ExponentialEstimator,
-}
-
-
-# @dataclass
-# class FluxResult:
-#     segment_info: SegmentInfo
-#     estimator: FluxEstimator
-
-
-def estimate_flux(config: FluxesConfig, data: pd.Series) -> FluxEstimator:
-    cls = ESTIMATORS[config.method]
-    return cls.create(data, config)
-
-
-def build_fluxes_dataframe(flux_results: List[FluxResult]) -> pd.DataFrame:
-    def make_row(flux_result: FluxResult):
-        return pd.Series(
-            dict(
-                start_utc=flux_result.measurement_meta.start,
-                end_utc=flux_result.measurement_meta.end,
-                valve_number=flux_result.measurement_meta.valve_number,
-                valve_label=flux_result.measurement_meta.valve_label,
-                column=flux_result.estimator.column,
-                vol_flux=flux_result.estimator.estimate_vol_flux(),
-                n_samples_total=flux_result.measurement_meta.n_samples,
-                n_samples_flux_estimate=flux_result.estimator.n_samples,
-            )
-        )
-
-    rows = list(map(make_row, flux_results))
-    return pd.DataFrame(rows)
-
-
-json_converter = cattr.preconf.json.make_converter()
-json_converter.register_unstructure_hook(datetime.datetime, datetime.datetime.isoformat)
-json_converter.register_unstructure_hook(
-    datetime.timedelta, datetime.timedelta.total_seconds
-)
-json_converter.register_structure_hook(
-    datetime.datetime, lambda v, _: datetime.datetime.fromisoformat(v)
-)
-json_converter.register_structure_hook(
-    datetime.timedelta, lambda v, _: datetime.timedelta(seconds=v)
-)
-json_converter.register_structure_hook(
-    FluxEstimator,
-    lambda obj, _: json_converter.structure(obj, ESTIMATORS[obj["config"]["method"]]),
-)

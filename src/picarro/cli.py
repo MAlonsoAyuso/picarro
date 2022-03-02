@@ -3,32 +3,43 @@ from __future__ import annotations
 import datetime
 import functools
 import glob
+import json
 import logging
 import os
 import shutil
-import sqlite3
+from collections import defaultdict
 from copy import deepcopy
 from enum import Enum, auto
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Union
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
+import cattr.preconf.json
 import click
 import matplotlib.pyplot as plt
-import numpy as np
+import pandas as pd
 import pydantic
 import toml
 
-import picarro.database
+import picarro.data
 import picarro.fluxes
 import picarro.logging
 import picarro.plot
+from picarro.util import ensure_tuple_of, format_duration
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG_PATH = Path("picarro_config.toml")
 
 
+class ConfigProblem(Exception):
+    pass
+
+
 class PicarroPathExists(Exception):
+    pass
+
+
+class PreviousStepRequired(Exception):
     pass
 
 
@@ -41,14 +52,15 @@ def handle_exceptions(func: Callable) -> Callable:
             raise click.ClickException(
                 f"Already exists: '{e}'. Use --force to overwrite."
             )
-        # except ConfigProblem as e:
-        #     raise click.ClickException(f"There is a problem with the config: {e}")
+        except ConfigProblem as e:
+            raise click.ClickException(f"There is a problem with the config: {e}")
         # except DataProcessingProblem as e:
         #     raise click.ClickException(f"There was a problem processing the data: {e}")
-        # except picarro.app.PreviousStepRequired as e:
-        #     raise click.ClickException(
-        #         f"A previous step is required before running this command: {e}"
-        #     )
+        except PreviousStepRequired as e:
+            raise click.ClickException(
+                f"A previous step is required before running this command. "
+                f"The following error message was received: {e}"
+            )
         except Exception as e:
             logger.exception(f"Unhandled exception: {e}")
             raise click.ClickException(f"Crashed due to an unhandled exception: {e}")
@@ -73,100 +85,8 @@ def add_force_option(func):
     return wrapper
 
 
-# @click.group()
-# @click.pass_context
-# @click.option(
-#     "config_path",
-#     "--config",
-#     type=click.Path(dir_okay=False, path_type=Path, exists=True),
-#     default=_DEFAULT_CONFIG_PATH,
-# )
-# @click.option("--debug", is_flag=True, default=False)
-# def cli(ctx: click.Context, config_path: Path, debug: bool):
-#     config_path = config_path.resolve()
-#     assert config_path.is_absolute()
-
-#     os.chdir(config_path.parent)
-
-#     config = picarro.config.AppConfig.from_toml(config_path)
-#     if debug:
-#         config.logging["root"]["level"] = "DEBUG"
-
-#     picarro.app.setup_logging(config)
-
-#     ctx.ensure_object(dict)
-#     ctx.obj["config"] = config
-
-
-# @cli.command()
-# @click.pass_context
-# @add_force_option
-# @click.option(
-#     "--identify/--no-identify",
-#     default=True,
-#     show_default=True,
-#     help="Analyze the source files for measurements.",
-# )
-# @click.option(
-#     "--export/--no-export",
-#     default=False,
-#     show_default=True,
-#     help="Export the measurements as csv files.",
-# )
-# @handle_exceptions
-# def measurements(ctx: click.Context, identify: bool, export: bool):
-#     config = ctx.obj["config"]
-#     assert isinstance(config, picarro.config.AppConfig), config
-
-#     if identify:
-#         picarro.app.identify_and_save_measurement_metas(config)
-#         measurement_metas = picarro.app.load_measurement_metas(config)
-#         logger.info(_summarize_measurements_meta(measurement_metas))
-
-#     if export:
-#         picarro.app.export_measurements(config)
-
-
-# def _summarize_measurements_meta(measurement_metas: List[MeasurementMeta]) -> str:
-#     chunks = {chunk for mm in measurement_metas for chunk in mm.chunks}
-#     paths = {chunk.path for chunk in chunks}
-#     return (
-#         f"Built {len(measurement_metas)} measurements "
-#         f"from {len(chunks)} chunks "
-#         f"in {len(paths)} files."
-#     )
-
-
-# @cli.command()
-# @click.pass_context
-# @add_force_option
-# @handle_exceptions
-# def fluxes(ctx: click.Context):
-#     config = ctx.obj["config"]
-#     assert isinstance(config, picarro.config.AppConfig), config
-
-#     picarro.app.estimate_and_save_fluxes(config)
-#     picarro.app.export_fluxes_csv(config)
-
-
-# @cli.command()
-# @click.pass_context
-# @add_force_option
-# @click.option(
-#     "--flux-fits/--no-flux-fits",
-#     default=False,
-#     help="Plot each measurement with the fitted functions.",
-# )
-# @handle_exceptions
-# def plot(ctx: click.Context, flux_fits: bool):
-#     config = ctx.obj["config"]
-#     assert isinstance(config, picarro.config.AppConfig), config
-
-#     if flux_fits:
-#         picarro.app.plot_flux_fits(config)
-
-
 @click.group()
+@handle_exceptions
 @click.pass_context
 @click.option(
     "config_path",
@@ -181,7 +101,7 @@ def cli(ctx: click.Context, config_path: Path, debug: bool):
     try:
         config = AppConfig.from_toml(config_path)
     except pydantic.ValidationError as e:
-        raise click.ClickException(f"Incorrect config in file '{config_path}'.\n{e}")
+        raise ConfigProblem(f"Incorrect config in file '{config_path}'.\n{e}")
 
     os.chdir(config_path.parent)
 
@@ -193,164 +113,246 @@ def cli(ctx: click.Context, config_path: Path, debug: bool):
     ctx.obj["config"] = config
 
 
-@cli.command("import")
+@cli.command()
+@handle_exceptions
 @click.pass_context
-def import_(ctx: click.Context):
+@add_force_option
+def measurements(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, AppConfig)
-    conn = open_database(config)
-    with conn:
-        n_samples_total = 0
-        n_files = 0
-        for path in _iter_paths(config.data_import.src):
-            n_samples_file = picarro.database.import_data(
-                conn,
-                Path(path),
-                config.data_import.valve_column,
-                config.data_import.columns,
+
+    filter_summaries: list[picarro.data.FilterSummary] = []
+    block_infos: list[picarro.data.BlockInfo] = []
+
+    with click.progressbar(
+        list(iter_paths(config.measurements.src)),
+        label="Processing files",
+        show_pos=True,
+    ) as paths:
+        for path in paths:
+            df = picarro.data.read_picarro_file(
+                path,
+                config.measurements.valve_column,
+                config.measurements.columns,
             )
-            n_files += 1
-            n_samples_total += n_samples_file
-    logger.info(f"Inserted {n_samples_total:,} samples from {n_files:,} files.")
-
-
-@cli.command()
-@click.pass_context
-def filters(ctx: click.Context):
-    config = ctx.obj["config"]
-    assert isinstance(config, AppConfig)
-    conn = open_database(config)
-    with conn:
-        picarro.database.remove_filters(conn)
-        for column, filter_params in config.filters.items():
-            picarro.database.apply_filter(conn, column, filter_params)
-            n_excluded = picarro.database.count_excluded_samples(conn, [column])
-            logger.info(f"Filter for {column!r} excludes {n_excluded:,} samples.")
-        n_excluded_total = picarro.database.count_excluded_samples(
-            conn, list(config.filters)
-        )
-        n_included_total = picarro.database.count_included_samples(conn)
-        n_total = n_excluded_total + n_included_total
-        share_excluded = n_excluded_total / n_total
-        logger.info(
-            f"Applied {len(config.filters)} filters "
-            f"together excluding {n_excluded_total:,} of {n_total:,} samples "
-            f"({share_excluded:.1%})."
-        )
-
-
-@cli.command()
-@click.pass_context
-def segments(ctx: click.Context):
-    config = ctx.obj["config"]
-    assert isinstance(config, AppConfig)
-    conn = open_database(config)
-    with conn:
-        picarro.database.identify_segments(conn, config.segments)
-    segments = list(picarro.database.iter_segments_info(conn))
-    additional_info = ""
-    if segments:
-        median_duration = datetime.timedelta(
-            seconds=round(
-                np.median([segment.duration.total_seconds() for segment in segments])
+            filter_results = picarro.data.get_data_filter_results(df, config.filters)
+            filter_summaries.append(
+                picarro.data.summarize_data_filter_results(filter_results)
             )
+            df = picarro.data.apply_filter_results(df, filter_results)
+            blocks = picarro.data.split_data_to_blocks(df, config.measurements.max_gap)
+            block_infos.extend(
+                [picarro.data.BlockInfo.from_block(path, block) for block in blocks]
+            )
+    log_data_filter_info(filter_summaries)
+
+    all_measurement_infos = list(
+        picarro.data.join_block_infos(
+            block_infos,
+            config.measurements.max_gap,
         )
-        valves = sorted({segment.valve_number for segment in segments})
-        additional_info = (
-            f" with median duration {median_duration} from valves {valves}"
-        )
-    logger.info(f"Identified {len(segments)} segments{additional_info}.")
+    )
+    accepted_measurement_infos = picarro.data.filter_measurements(
+        all_measurement_infos,
+        config.measurements.min_duration,
+        config.measurements.max_duration,
+    )
+    log_measurement_filter_info(all_measurement_infos, accepted_measurement_infos)
+
+    save_json(accepted_measurement_infos, config, OutItem.measurement_infos_json)
 
 
 @cli.command()
+@handle_exceptions
 @click.pass_context
+@add_force_option
 def fluxes(ctx: click.Context):
     config = ctx.obj["config"]
     assert isinstance(config, AppConfig)
-    conn = open_database(config)
-    n_segments = 0
-    n_estimates = 0
-    with conn:
-        for segment_info in picarro.database.iter_segments_info(conn):
-            n_segments += 1
-            segment = picarro.database.read_segment(conn, segment_info)
-            for column in config.fluxes.columns:
-                estimate = picarro.fluxes.estimate_flux(config.fluxes, segment[column])
-                n_estimates += 1
-                picarro.database.save_flux_estimate(conn, estimate)
-    logger.info(
-        f"Made {n_estimates} flux estimates ({', '.join(config.fluxes.columns)}) "
-        f"from {n_segments} segments."
+    try:
+        measurement_infos = load_json(config, OutItem.measurement_infos_json)
+    except FileNotFoundError as e:
+        raise PreviousStepRequired(e)
+    measurement_infos = ensure_tuple_of(measurement_infos, picarro.data.MeasurementInfo)
+
+    estimators = []
+    estimation_summaries = []
+    with click.progressbar(
+        measurement_infos,
+        label="Processing measurements",
+        show_pos=True,
+    ) as measurement_infos:
+        for measurement_info in measurement_infos:
+            measurement = picarro.data.read_measurement(
+                measurement_info,
+                config.measurements.valve_column,
+                config.measurements.columns,
+            )
+            for column in config.fluxes.gases:
+                estimator = picarro.fluxes.ExponentialEstimator.fit(
+                    measurement[column], config.fluxes.estimation_params
+                )
+                estimators.append(estimator)
+                estimation_summaries.append(
+                    _build_estimation_summary(measurement_info, estimator, config)
+                )
+    save_json(estimators, config, OutItem.flux_estimators_json)
+    save_csv(pd.DataFrame(estimation_summaries), config, OutItem.fluxes_csv)
+
+
+def _build_estimation_summary(
+    measurement_info: picarro.data.MeasurementInfo,
+    estimator: picarro.fluxes.ExponentialEstimator,
+    config: AppConfig,
+) -> dict:
+    vol_flux = estimator.estimate_vol_flux()
+    return dict(
+        data_start=measurement_info.data_start,
+        valve_number=measurement_info.valve_number,
+        valve_label=config.valve_labels.get(measurement_info.valve_number, None),
+        t0=estimator.moments.t0,
+        gas=estimator.gas,
+        vol_flux=vol_flux,
+        molar_flux=config.fluxes.vol_flux_to_molar_flux(vol_flux),
     )
 
 
-@cli.command()
-@click.pass_context
-@add_force_option
-@click.option("--flux-fits", is_flag=True, default=False)
-@handle_exceptions
-def plot(ctx: click.Context, flux_fits: bool):
-    config = ctx.obj["config"]
-    assert isinstance(config, AppConfig)
-    if flux_fits:
-        _plot_flux_fits(config)
-
-
 def _plot_flux_fits(config: AppConfig):
-    conn = open_database(config)
     plot_dir = config.output.get_path(OutItem.flux_plots_dir)
     if plot_dir.exists():
         if not config.output.force:
             raise PicarroPathExists(plot_dir)
         shutil.rmtree(plot_dir)
     plot_dir.mkdir(parents=True)
+
+    try:
+        measurement_infos = measurement_infos = ensure_tuple_of(
+            load_json(config, OutItem.measurement_infos_json),
+            picarro.data.MeasurementInfo,
+        )
+    except FileNotFoundError as e:
+        raise PreviousStepRequired(e)
+
+    all_estimators = ensure_tuple_of(
+        load_json(config, OutItem.flux_estimators_json),
+        picarro.fluxes.ExponentialEstimator,
+    )
+    estimators_by_start_time = defaultdict(list)
+    for estimator in all_estimators:
+        estimators_by_start_time[estimator.moments.data_start].append(estimator)
+
     with click.progressbar(
-        list(picarro.database.iter_segments_info(conn)),
-        label="Plotting flux fits",
+        measurement_infos,
+        label="Plotting measurements",
         show_pos=True,
-    ) as segments_infos:
-        for segment_info in segments_infos:
-            estimates = [
-                picarro.database.read_flux_estimate(conn, segment_info.start, column)
-                for column in config.fluxes.columns
-            ]
-            segment = picarro.database.read_segment(conn, segment_info)
-            fig = picarro.plot.plot_segment(
-                segment, config.fluxes.columns, estimates, config.valve_labels
+    ) as measurement_infos:
+        for measurement_info in measurement_infos:
+            assert isinstance(measurement_info, picarro.data.MeasurementInfo)
+            measurement = picarro.data.read_measurement(
+                measurement_info,
+                config.measurements.valve_column,
+                config.measurements.columns,
             )
-            plot_path = plot_dir / _build_segment_file_name(
-                segment_info, ".png", config.valve_labels
+            fig = picarro.plot.plot_measurement(
+                measurement,
+                config.fluxes.gases,
+                estimators_by_start_time[measurement_info.data_start],
+                config.valve_labels,
+            )
+            plot_path = plot_dir / _build_measurement_file_name(
+                measurement_info, ".png", config.valve_labels
             )
             fig.savefig(plot_path)
             plt.close(fig)
 
 
-class DataImportConfig(pydantic.BaseModel):
+_PLOT_FUNCTIONS = {
+    "flux-fits": _plot_flux_fits,
+}
+
+
+@cli.command()
+@handle_exceptions
+@click.pass_context
+@add_force_option
+@click.argument("plot_name", type=click.Choice(list(_PLOT_FUNCTIONS)))
+def plot(ctx: click.Context, plot_name: str):
+    config = ctx.obj["config"]
+    assert isinstance(config, AppConfig)
+    _PLOT_FUNCTIONS[plot_name](config)
+
+
+class MeasurementConfig(pydantic.BaseModel, extra=pydantic.Extra.forbid):
     valve_column: str
     src: Union[str, List[str]] = pydantic.Field(default_factory=list)
     columns: List[str] = pydantic.Field(default_factory=list)
+    max_gap: datetime.timedelta = datetime.timedelta(seconds=10)
+    min_duration: Optional[datetime.timedelta] = datetime.timedelta(seconds=60)
+    max_duration: Optional[datetime.timedelta] = None
 
 
-FiltersConfig = Dict[str, picarro.database.FilterParams]
+FiltersConfig = Dict[str, picarro.data.FilterParams]
+
+
+class FluxesConfig(pydantic.BaseModel, extra=pydantic.Extra.forbid):
+    t0_delay: datetime.timedelta
+    t0_margin: datetime.timedelta
+    A: float
+    V: float
+    Q: float  # the units for Q and V must be such that V/Q has unit second.
+    R: float = 8.31447  # ideal gas constant in SI units
+    T: Optional[float] = None
+    P: Optional[float] = None
+
+    gases: Tuple[str, ...] = ()
+
+    @property
+    def estimation_params(self) -> picarro.fluxes.EstimationParams:
+        return picarro.fluxes.EstimationParams(
+            self.t0_delay,
+            self.t0_margin,
+            self.tau,
+            self.h,
+        )
+
+    @property
+    def tau(self) -> datetime.timedelta:
+        return datetime.timedelta(seconds=self.V / self.Q)
+
+    @property
+    def h(self) -> float:
+        return self.V / self.A
+
+    def vol_flux_to_molar_flux(self, vol_flux: float) -> Optional[float]:
+        if self.T and self.P:
+            return vol_flux * self.P / (self.R * self.T)  # ideal gas law PV = nRT
+            # If data and parameters would be in SI units, this would be too.
+            # But in practice it is probably not, since our PICARRO data files
+            # give concentrations in ppm.
+            # Therefore the units of the mass flux is in MICROmoles/m2/s.
 
 
 class OutItem(Enum):
-    database = auto()
-    segments_summary_csv = auto()
+    measurement_infos_json = auto()
+    flux_estimators_json = auto()
     fluxes_csv = auto()
     flux_plots_dir = auto()
 
 
 DEFAULT_PATHS = {
-    OutItem.database: Path("picarro.sqlite"),
-    OutItem.segments_summary_csv: Path("segments_summary.csv"),
+    OutItem.measurement_infos_json: Path("measurements.json"),
+    OutItem.flux_estimators_json: Path("flux_estimators.json"),
     OutItem.fluxes_csv: Path("fluxes.csv"),
     OutItem.flux_plots_dir: Path("plots_fluxes"),
 }
 
+assert set(DEFAULT_PATHS) == set(OutItem)
 
-class OutputConfig(pydantic.BaseModel):
-    outdir: Path = Path("picarro_output")
+DEFAULT_OUTDIR = Path("picarro_output")
+
+
+class OutputConfig(pydantic.BaseModel, extra=pydantic.Extra.forbid):
+    outdir: Path = DEFAULT_OUTDIR
     rel_paths: Dict[OutItem, Path] = pydantic.Field(default_factory=DEFAULT_PATHS.copy)
     force: bool = False
 
@@ -358,11 +360,10 @@ class OutputConfig(pydantic.BaseModel):
         return self.outdir / self.rel_paths[item]
 
 
-class AppConfig(pydantic.BaseModel):
-    data_import: DataImportConfig
-    segments: picarro.database.SegmentingParams
-    fluxes: picarro.fluxes.FluxesConfig
+class AppConfig(pydantic.BaseModel, extra=pydantic.Extra.forbid):
     filters: FiltersConfig = pydantic.Field(default_factory=dict)
+    measurements: MeasurementConfig
+    fluxes: FluxesConfig
     output: OutputConfig = pydantic.Field(default_factory=OutputConfig)
     valve_labels: Dict[int, str] = pydantic.Field(default_factory=dict)
     logging: picarro.logging.LogSettingsDict = pydantic.Field(
@@ -374,46 +375,161 @@ class AppConfig(pydantic.BaseModel):
         # For convenience, automatically adding any columns included in
         # - flux_estimation
         # - filters
-        # but not included in data_import.extra_columns
+        # but not explicitily listed for reading
         if self.fluxes:
-            self.data_import.columns.extend([
-                c
-                for c in self.fluxes.columns
-                if c not in self.data_import.columns
-            ])
+            self.measurements.columns.extend(
+                [c for c in self.fluxes.gases if c not in self.measurements.columns]
+            )
         if self.filters:
-            self.data_import.columns.extend([
-                c
-                for c in self.filters.keys()
-                if c not in self.data_import.columns
-            ])
+            self.measurements.columns.extend(
+                [c for c in self.filters.keys() if c not in self.measurements.columns]
+            )
 
     @classmethod
-    def from_toml(cls, path: Path):
-        with open(path, "r") as f:
+    def from_toml(cls, config_path: Path):
+        with open(config_path, "r") as f:
             obj = toml.load(f)
+        output_conf = obj.setdefault("output", {})
+        output_conf.setdefault(
+            "outdir",
+            Path(output_conf.get("outdir", DEFAULT_OUTDIR)) / config_path.stem,
+        )
         return cls.parse_obj(obj)
 
 
-def open_database(config: AppConfig) -> sqlite3.Connection:
-    return picarro.database.create_or_open(config.output.get_path(OutItem.database))
+_json_converter = cattr.preconf.json.make_converter()
+_json_converter.register_unstructure_hook(Path, str)
+_json_converter.register_structure_hook(Path, lambda v, _: Path(v))
+
+_json_converter.register_unstructure_hook(
+    datetime.datetime, datetime.datetime.isoformat
+)
+_json_converter.register_unstructure_hook(
+    datetime.timedelta, datetime.timedelta.total_seconds
+)
+_json_converter.register_structure_hook(
+    datetime.datetime, lambda v, _: datetime.datetime.fromisoformat(v)
+)
+_json_converter.register_structure_hook(
+    datetime.timedelta, lambda v, _: datetime.timedelta(seconds=v)
+)
 
 
-def _iter_paths(src: Union[str, list[str]]) -> Iterable[Path]:
-    glob_patterns = [src] if isinstance(src, str) else src
-    for glob_pattern in glob_patterns:
-        paths = glob.glob(glob_pattern, recursive=True)
-        logger.info(f"{len(paths)} files found: {glob_pattern}")
-        yield from map(Path, paths)
+_OUT_ITEM_TYPES = {
+    OutItem.measurement_infos_json: Tuple[picarro.data.MeasurementInfo, ...],
+    OutItem.flux_estimators_json: Tuple[picarro.fluxes.ExponentialEstimator, ...],
+}
 
 
-def _build_segment_file_name(
-    segment_info: picarro.database.SegmentInfo,
+def save_json(obj: Any, config: AppConfig, out_item: OutItem):
+    path = config.output.get_path(out_item)
+    json_obj = _json_converter.unstructure(
+        obj, unstructure_as=_OUT_ITEM_TYPES[out_item]
+    )
+    mode = "w" if config.output.force else "x"
+    with open(path, mode) as f:
+        json.dump(json_obj, f)
+
+
+def load_json(config: AppConfig, out_item: OutItem) -> Any:
+    path = config.output.get_path(out_item)
+    with open(path, "r") as f:
+        json_obj = json.load(f)
+    obj = _json_converter.structure(json_obj, _OUT_ITEM_TYPES[out_item])
+    return obj
+
+
+def save_csv(df: pd.DataFrame, config: AppConfig, out_item: OutItem):
+    # Index is not written to file. To prevent accidental loss of any meaningful
+    # data in the index, check that it is just a RangeIndex.
+    # To write a DataFrame including index to csv, do df.reset_index() or similar.
+    assert isinstance(df.index, pd.RangeIndex), df.index
+    path = config.output.get_path(out_item)
+    mode = "w" if config.output.force else "x"
+    with open(path, mode) as f:
+        df.to_csv(f, index=False)
+
+
+def _build_measurement_file_name(
+    measurement_info: picarro.data.MeasurementInfo,
     suffix: str,
     valve_labels: dict[int, str],
 ) -> str:
     valve_label = valve_labels.get(
-        segment_info.valve_number, str(segment_info.valve_number)
+        measurement_info.valve_number, str(measurement_info.valve_number)
     )
     assert suffix == "" or suffix.startswith("."), suffix
-    return f"{valve_label}-{segment_info.start:%Y%m%d-%H%M%S}{suffix}"
+    return f"{valve_label}-{measurement_info.data_start:%Y%m%d-%H%M%S}{suffix}"
+
+
+def iter_paths(src: Union[str, list[str]]) -> Iterator[Path]:
+    glob_patterns = src
+    if isinstance(glob_patterns, str):
+        glob_patterns = [glob_patterns]
+    for glob_pattern in glob_patterns:
+        file_paths = list(map(Path, glob.glob(glob_pattern, recursive=True)))
+        logger.info(
+            f"Found {len(file_paths)} source files using pattern {glob_pattern!r}."
+        )
+        yield from file_paths
+
+
+def log_data_filter_info(filter_summaries: Iterable[picarro.data.FilterSummary]):
+    filter_summaries = list(filter_summaries)
+    n_files = len(filter_summaries)
+    n_rows = sum(fs.n_rows for fs in filter_summaries)
+    n_removed_total = sum(fs.n_removed_total for fs in filter_summaries)
+    n_removed_by_col = pd.DataFrame(
+        [fs.n_removed_by_col for fs in filter_summaries]
+    ).sum()
+
+    lines = []
+    lines.append(
+        f"Filtered {n_files} files, rejecting {n_removed_total:,} of {n_rows:,} rows "
+        f"({n_removed_total / n_rows:.1%} of total)."
+    )
+    for col, n_removed in n_removed_by_col.items():
+        assert isinstance(n_removed, int), n_removed
+        lines.append(
+            f"Filter '{col}': rejected {n_removed:,} rows "
+            f"({n_removed / n_rows:.1%} of total)."
+        )
+
+    for line in lines:
+        logger.info(line)
+
+
+def log_measurement_filter_info(
+    all_infos: list[picarro.data.MeasurementInfo],
+    accepted: list[picarro.data.MeasurementInfo],
+):
+    skipped = set(all_infos) - set(accepted)
+    duration_skipped = _sum_durations(skipped)
+    duration_accepted = _sum_durations(accepted)
+    duration_total = _sum_durations(all_infos)
+    logger.info(
+        f"Identified {len(all_infos)} measurements "
+        f"with a total duration of {format_duration(duration_total)}. "
+    )
+    logger.info(
+        f"Skipped {len(skipped)} measurements "
+        f"with a total duration of {format_duration(duration_skipped)} "
+        f"({duration_skipped/duration_total:.1%} of the time). "
+        f"Average duration of skipped measurement: "
+        f"{format_duration(duration_skipped/len(skipped))}."
+    )
+    logger.info(
+        f"Accepted {len(accepted)} measurements "
+        f"with a total duration of {format_duration(duration_accepted)}. "
+        f"Average duration of accepted measurement: "
+        f"{format_duration(duration_accepted/len(accepted))}."
+    )
+
+
+def _sum_durations(
+    measurements_infos: Iterable[picarro.data.MeasurementInfo],
+) -> datetime.timedelta:
+    total = datetime.timedelta(0)
+    for m in measurements_infos:
+        total += m.duration
+    return total

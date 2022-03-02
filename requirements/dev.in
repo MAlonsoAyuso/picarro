@@ -6,3 +6,4 @@ twine
 black
 isort
 pre-commit
+seaborn
