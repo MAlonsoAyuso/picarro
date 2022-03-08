@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import functools
 import glob
@@ -385,6 +386,13 @@ class AppConfig(pydantic.BaseModel, extra=pydantic.Extra.forbid):
                 [c for c in self.filters.keys() if c not in self.measurements.columns]
             )
 
+        # Convert the filters to ordinary dataclass instances because
+        # their __repr__ is much better.
+        self.filters = {
+            column: picarro.data.FilterParams(**dataclasses.asdict(filter_params))
+            for column, filter_params in self.filters.items()
+        }
+
     @classmethod
     def from_toml(cls, config_path: Path):
         with open(config_path, "r") as f:
@@ -521,8 +529,12 @@ def log_measurement_filter_info(
     logger.info(
         f"Accepted {len(accepted)} measurements "
         f"with a total duration of {format_duration(duration_accepted)}. "
-        f"Average duration of accepted measurement: "
-        f"{format_duration(duration_accepted/len(accepted))}."
+        + (
+            f"Average duration of accepted measurement: "
+            f"{format_duration(duration_accepted/len(accepted))}."
+            if accepted
+            else ""
+        )
     )
 
 

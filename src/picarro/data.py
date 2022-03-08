@@ -118,13 +118,6 @@ class FilteredMeasurements:
     rejected: Tuple[MeasurementInfo]
 
 
-# @dataclass
-# class SegmentingParams:
-#     max_gap: datetime.timedelta = datetime.timedelta(seconds=10)
-#     min_duration: Optional[datetime.timedelta] = datetime.timedelta(seconds=60)
-#     max_duration: Optional[datetime.timedelta] = None
-
-
 def read_picarro_file(
     path: Path,
     valve_src_column: Column,
@@ -185,15 +178,21 @@ def read_picarro_file(
         data = data.drop(columns=EPOCH_TIME_COLUMN)
 
     # Drop rows with null values
+    # One row with null values (the last) is an expected result if the machine
+    # has turned off suddenly. Might happen due to computer crash, power outage, ...
     row_has_null_value = data.isnull().any(axis=1)
     null_count = row_has_null_value.sum()
+    logger.debug(f"Dropping {null_count} rows with nulls in '{path}'.")
     if null_count > 1:
         logger.warning(f"Dropping {null_count} rows with nulls in '{path}'.")
     data = data[~row_has_null_value]
 
     # Drop any rows with non-integer valve numbers; then create VALVE_NUMBER_COLUMN
     if not str(data[valve_src_column].dtype).startswith("int"):
-        data = data.loc[data[valve_src_column].round() == data[valve_src_column]]
+        valve_number_is_int = data[valve_src_column].round() == data[valve_src_column]
+        count_non_int = int((~valve_number_is_int).sum())
+        logger.debug(f"Dropping {count_non_int} rows with non-integer valve number.")
+        data = data.loc[valve_number_is_int]
         data[VALVE_NUMBER_COLUMN] = data[valve_src_column].astype(int)
 
     return data
@@ -224,7 +223,6 @@ def read_measurement(
 
 
 def _get_filter_removals_column(s: pd.Series, filter_params: FilterParams) -> pd.Series:
-    logger.debug(f"Applying filter {filter_params} on {s.name}")
     excluded = pd.Series(data=False, index=s.index)
     if filter_params.allow:
         excluded |= ~s.isin(filter_params.allow)
@@ -234,6 +232,10 @@ def _get_filter_removals_column(s: pd.Series, filter_params: FilterParams) -> pd
         excluded |= s < filter_params.min  # pyright: reportGeneralTypeIssues=false
     if filter_params.max is not None:
         excluded |= filter_params.max < s
+    logger.debug(
+        f"Dropping {excluded.sum()}/{len(excluded)} rows due to filter for {s.name}: "
+        f"{filter_params}. "
+    )
     return excluded
 
 
@@ -315,18 +317,23 @@ def filter_measurements(
     min_duration: Optional[datetime.timedelta],
     max_duration: Optional[datetime.timedelta],
 ) -> list[MeasurementInfo]:
-    accepted = []
+    accepted_measurements = []
     for measurement_info in measurement_infos:
         duration = measurement_info.data_end - measurement_info.data_start
+        reject = False
         if min_duration and duration < min_duration:
-            continue
-        if max_duration and max_duration < duration:
-            continue
+            reject = True
+        elif max_duration and max_duration < duration:
+            reject = True
+
+        log_action = "Rejected" if reject else "Accepted"
         logger.debug(
-            f"Accepting measurement. "
+            f"{log_action} measurement. "
             f"Start time: {measurement_info.data_start}. "
             f"Blocks: {len(measurement_info.blocks)}. "
             f"Duration: {format_duration(measurement_info.duration)}."
         )
-        accepted.append(measurement_info)
-    return accepted
+        if not reject:
+            accepted_measurements.append(measurement_info)
+
+    return accepted_measurements
