@@ -106,7 +106,7 @@ def cli(ctx: click.Context, config_path: Path, debug: bool):
     os.chdir(config_path.parent)
 
     if debug:
-        config.logging["root"]["level"] = "DEBUG"
+        config.logging["handlers"]["console"]["level"] = "DEBUG"
 
     picarro.logging.setup_logging(config.logging, config.output.outdir)
 

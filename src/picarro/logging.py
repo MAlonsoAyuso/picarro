@@ -21,7 +21,7 @@ DEFAULT_LOG_SETTINGS = {
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "level": "DEBUG",
+            "level": "INFO",
             "formatter": "brief",
             "filters": ["allow_picarro"],
         },
@@ -45,7 +45,7 @@ DEFAULT_LOG_SETTINGS = {
         },
     },
     "root": {
-        "level": "INFO",
+        "level": "DEBUG",
         "handlers": [
             "console",
             "file_debug",
