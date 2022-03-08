@@ -8,3 +8,4 @@ dist
 # vs code
 *.code-workspace
 .vscode
+.ipynb_checkpoints
